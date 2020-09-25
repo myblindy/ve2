@@ -120,6 +120,11 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>_DEBUG;_WINDOWS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
+      <LanguageStandard>stdcpplatest</LanguageStandard>
+      <LanguageStandard_C>stdc17</LanguageStandard_C>
+      <GenerateModuleDependencies>false</GenerateModuleDependencies>
+      <AdditionalOptions>/stdIfcDir "C:\Program Files (x86)\Microsoft Visual Studio\2019\Preview\VC\Tools\MSVC\14.28.29304\ifc\x64" /experimental:module %(AdditionalOptions)</AdditionalOptions>
+      <UseStandardPreprocessor>false</UseStandardPreprocessor>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -146,9 +151,9 @@
     <ClInclude Include="framework.h" />
     <ClInclude Include="Resource.h" />
     <ClInclude Include="targetver.h" />
-    <ClInclude Include="ve2.h" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="shader_programs.ixx" />
     <ClCompile Include="ve2.cpp" />
   </ItemGroup>
   <ItemGroup>
