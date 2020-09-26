@@ -22,4 +22,7 @@ extern "C"
 #include <libavformat/avformat.h>
 }
 
-constexpr const char *ApplicationName = "ve2";
+#include <glm/glm.hpp>
+#include <glm/gtc/type_ptr.hpp>
+
+constexpr const char* ApplicationName = "ve2";

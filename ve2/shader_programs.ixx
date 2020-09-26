@@ -5,8 +5,15 @@ module;
 
 #include <string>
 #include <iostream>
+#include <unordered_map>
 
 export module shader_programs;
+
+export struct ShaderProgram
+{
+	int program_name;
+	std::unordered_map<std::string, int> uniform_locations;
+};
 
 export enum class ShaderType { Vertex = GL_VERTEX_SHADER, Fragment = GL_FRAGMENT_SHADER };
 export GLuint compile_shader_from_source(const std::string source, const ShaderType type)
@@ -26,10 +33,10 @@ export GLuint compile_shader_from_source(const std::string source, const ShaderT
 		glGetShaderiv(shader, GL_INFO_LOG_LENGTH, &size);
 
 		std::string info_log;
-		info_log.reserve(size);
+		info_log.resize(size);
 		glGetShaderInfoLog(shader, size, nullptr, info_log.data());
 
-		std::cerr << "Shader compilation errors:\n" << info_log;
+		std::cerr << "Shader compilation errors:\n" << info_log << std::endl;
 		return -1;
 	}
 
@@ -56,7 +63,7 @@ template<class Head, class... Tail>
 using are_same = std::conjunction<std::is_same<Head, Tail>...>;
 
 export template<class... Tail, class = std::enable_if_t<are_same<GLuint, Tail...>::value, void>>
-GLuint link_shader_program_from_shader_objects(GLuint head_shader, Tail... tail_shaders)
+std::unique_ptr<ShaderProgram> link_shader_program_from_shader_objects(GLuint head_shader, Tail... tail_shaders)
 {
 	const auto shader_program = glCreateProgram();
 
@@ -72,13 +79,27 @@ GLuint link_shader_program_from_shader_objects(GLuint head_shader, Tail... tail_
 		glGetProgramiv(shader_program, GL_INFO_LOG_LENGTH, &size);
 
 		std::string info_log;
-		info_log.reserve(size);
+		info_log.resize(size);
 		glGetProgramInfoLog(shader_program, size, nullptr, info_log.data());
 
-		return -1;
+		std::cerr << "Program compilation errors:\n" << info_log << std::endl;
+		return nullptr;
 	}
 
 	delete_shaders(head_shader, tail_shaders...);
 
-	return shader_program;
+	auto result = std::make_unique<ShaderProgram>();
+	result->program_name = shader_program;
+
+	GLint uniforms_count{};
+	glGetProgramiv(shader_program, GL_ACTIVE_UNIFORMS, &uniforms_count);
+
+	for (int i = 0; i < uniforms_count; ++i)
+	{
+		char name[60]{};
+		glGetActiveUniformName(shader_program, i, sizeof(name), nullptr, name);
+		result->uniform_locations[name] = glGetUniformLocation(shader_program, name);
+	}
+
+	return result;
 }
