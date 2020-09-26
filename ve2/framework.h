@@ -24,5 +24,6 @@ extern "C"
 
 #include <glm/glm.hpp>
 #include <glm/gtc/type_ptr.hpp>
+#include <glm/gtx/transform.hpp>
 
 constexpr const char* ApplicationName = "ve2";

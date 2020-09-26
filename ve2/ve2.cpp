@@ -113,10 +113,17 @@ struct Vertex
 };
 #pragma pack(pop)
 
+void update_aspect_ratio()
+{
+	float ar_window = (float)window_width / window_height, ar_video = (float)video_stream->codecpar->width / video_stream->codecpar->height;
+	glProgramUniformMatrix4fv(shader_program->program_name, shader_program->uniform_locations["transform_matrix"], 1, false, value_ptr(scale(
+		ar_window < ar_video ? vec3(1, ar_window / ar_video, 1) : vec3(ar_video / ar_window, 1, 1))));
+}
+
 void window_size_callback(GLFWwindow* window, int width, int height)
 {
-	window_width = width;
-	window_height = height;
+	glViewport(0, 0, window_width = width, window_height = height);
+	update_aspect_ratio();
 }
 
 int gl_init()
@@ -148,7 +155,7 @@ int gl_init()
 			void main() \n\
 			{ \n\
 				fs_uv = uv; \n\
-				gl_Position = vec4(position, 0, 1) /** transform_matrix*/; \n\
+				gl_Position = vec4(position, 0, 1) * transform_matrix; \n\
 			}", ShaderType::Vertex),
 		compile_shader_from_source("\
 			#version 460 \n\
@@ -192,7 +199,9 @@ int gl_init()
 	glProgramUniform1i(shader_program->program_name, shader_program->uniform_locations["y_texture"], 0);
 	glProgramUniform1i(shader_program->program_name, shader_program->uniform_locations["u_texture"], 1);
 	glProgramUniform1i(shader_program->program_name, shader_program->uniform_locations["v_texture"], 2);
-	glProgramUniformMatrix4fv(shader_program->program_name, shader_program->uniform_locations["transform_matrix"], 1, false, value_ptr(mat4()));
+
+	// aspect ratio transform
+	update_aspect_ratio();
 
 	// gl state init stuff
 	glClearColor(0, 0, 0, 0);
