@@ -32,6 +32,9 @@
     <ClCompile Include="shader_programs.ixx">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="Utilities.ixx">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="ve2.rc">

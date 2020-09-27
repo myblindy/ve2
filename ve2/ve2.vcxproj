@@ -156,6 +156,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="shader_programs.ixx" />
+    <ClCompile Include="utilities.ixx" />
     <ClCompile Include="ve2.cpp" />
   </ItemGroup>
   <ItemGroup>

@@ -7,6 +7,11 @@
 #include <iostream>
 #include <span>
 #include <functional>
+#include <thread>
+#include <queue>
+#include <vector>
+#include <mutex>
+#include <string>
 
 extern "C"
 {

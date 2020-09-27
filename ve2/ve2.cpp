@@ -2,6 +2,8 @@
 //
 
 import shader_programs;
+import utilities;
+
 #include "framework.h"
 
 using namespace std;
@@ -19,7 +21,52 @@ AVFrame* input_frame;
 AVPacket* input_packet;
 AVStream* video_stream;
 AVCodecContext* codec_decoder_context;
-double frame_time_sec, last_frame_time_sec = 0;
+double frame_time_sec, next_frame_time_sec = 0;
+
+struct FrameData
+{
+	vector<uint8_t> y, u, v;
+	size_t y_stride, u_stride, v_stride;
+
+	FrameData(const char* y_data, size_t y_length, size_t y_stride, const char* u_data, size_t u_length, size_t u_stride, const char* v_data, size_t v_length, size_t v_stride)
+		: y(y_data, y_data + y_length), y_stride(y_stride), u(u_data, u_data + u_length), u_stride(u_stride), v(v_data, v_data + v_length), v_stride(v_stride)
+	{
+	}
+};
+constexpr int frames_queue_max_length = 10;
+queue<unique_ptr<FrameData>> frames_queue;
+mutex frames_queue_mutex;
+condition_variable frames_queue_cv;
+
+int av_get_next_frame(function<void(AVFrame*)> process_frame)
+{
+	while (av_read_frame(format_context, input_packet) >= 0)
+	{
+		if (input_packet->stream_index == video_stream->index)
+		{
+			// get the frame
+			CHECK_AV_SUCCESS(avcodec_send_packet(codec_decoder_context, input_packet));
+
+			int res{};
+			while (1)
+			{
+				res = avcodec_receive_frame(codec_decoder_context, input_frame);
+				if (res == AVERROR(EAGAIN) || res == AVERROR_EOF) break;
+				CHECK_AV_SUCCESS(res);
+
+				process_frame(input_frame);
+
+				av_frame_unref(input_frame);
+
+				return 0;
+			}
+		}
+
+		av_packet_unref(input_packet);
+	}
+
+	return AVERROR_EOF;
+}
 
 int av_open(const char* url)
 {
@@ -58,37 +105,25 @@ int av_open(const char* url)
 	const auto frame_rate_rational = av_guess_frame_rate(format_context, video_stream, nullptr);
 	frame_time_sec = static_cast<double>(frame_rate_rational.den) / frame_rate_rational.num;
 
-	return 0;
-}
-
-int av_get_next_frame(function<void(AVFrame*)> process_frame)
-{
-	while (av_read_frame(format_context, input_packet) >= 0)
-	{
-		if (input_packet->stream_index == video_stream->index)
+	thread([&]()
 		{
-			// get the frame
-			CHECK_AV_SUCCESS(avcodec_send_packet(codec_decoder_context, input_packet));
+			while (av_get_next_frame([&](AVFrame* frame)
+				{
+					auto fd = make_unique<FrameData>(
+						(const char*)frame->data[0], frame->linesize[0] * video_stream->codecpar->height, frame->linesize[0],
+						(const char*)frame->data[1], frame->linesize[1] * video_stream->codecpar->height / 2, frame->linesize[1],
+						(const char*)frame->data[2], frame->linesize[2] * video_stream->codecpar->height / 2, frame->linesize[2]);
 
-			int res{};
-			while (1)
+					// queue the frame
+					unique_lock<mutex> lock(frames_queue_mutex);
+					frames_queue_cv.wait(lock, [] { return frames_queue.size() < frames_queue_max_length; });
+					frames_queue.push(move(fd));
+				}) != AVERROR_EOF)
 			{
-				res = avcodec_receive_frame(codec_decoder_context, input_frame);
-				if (res == AVERROR(EAGAIN) || res == AVERROR_EOF) break;
-				CHECK_AV_SUCCESS(res);
-
-				process_frame(input_frame);
-
-				av_frame_unref(input_frame);
-
-				return 0;
 			}
-		}
+		}).detach();
 
-		av_packet_unref(input_packet);
-	}
-
-	return AVERROR_EOF;
+		return 0;
 }
 
 unique_ptr<ShaderProgram> shader_program;
@@ -211,19 +246,38 @@ int gl_init()
 	return 0;
 }
 
+bool had_underflow = false;
+
 // The main render function, return true to swap buffers.
 bool gl_render()
 {
 	const auto current_time_sec = glfwGetTime();
-	if (current_time_sec - last_frame_time_sec < frame_time_sec) return false;
-	last_frame_time_sec = current_time_sec;
+	if (current_time_sec < next_frame_time_sec) return false;
 
 	// read the next video frame
-	av_get_next_frame([&](AVFrame* frame)
+	{
+		lock_guard<mutex> lock(frames_queue_mutex);
+		if (frames_queue.empty())
 		{
-			for (int i = 0; i < yuv_planar_textures_count; ++i)
-				glTextureSubImage2D(yuv_planar_texture_names[i], 0, 0, 0, video_stream->codecpar->width / (i ? 2 : 1), video_stream->codecpar->height / (i ? 2 : 1), GL_RED, GL_UNSIGNED_BYTE, frame->data[i]);
-		});
+			had_underflow = true;
+			return false;					// no data, buffer underflow
+		}
+
+		const auto& frame = frames_queue.front();
+		glPixelStorei(GL_UNPACK_ROW_LENGTH, frame->y_stride);
+		glTextureSubImage2D(yuv_planar_texture_names[0], 0, 0, 0, video_stream->codecpar->width, video_stream->codecpar->height, GL_RED, GL_UNSIGNED_BYTE, frame->y.data());
+		glPixelStorei(GL_UNPACK_ROW_LENGTH, frame->u_stride);
+		glTextureSubImage2D(yuv_planar_texture_names[1], 0, 0, 0, video_stream->codecpar->width / 2, video_stream->codecpar->height / 2, GL_RED, GL_UNSIGNED_BYTE, frame->u.data());
+		glPixelStorei(GL_UNPACK_ROW_LENGTH, frame->v_stride);
+		glTextureSubImage2D(yuv_planar_texture_names[2], 0, 0, 0, video_stream->codecpar->width / 2, video_stream->codecpar->height / 2, GL_RED, GL_UNSIGNED_BYTE, frame->v.data());
+		frames_queue.pop();
+
+		// notify the decoder thread that we consumed a frame
+		frames_queue_cv.notify_all();
+	}
+
+	// frame is processed
+	next_frame_time_sec += frame_time_sec;
 
 	glClear(GL_COLOR_BUFFER_BIT);
 
@@ -237,16 +291,21 @@ bool gl_render()
 	return true;
 }
 
-int main(const char* args, int argc)
+int main(int argc, const char* argv[])
 {
-	if (av_open("C:\\Users\\Marius\\Downloads\\Yuju Sleeping.mp4")) return -1;
+	if (av_open(argv[1])) return -1;
 
 	if (gl_init()) return -1;
+	next_frame_time_sec = glfwGetTime() + frame_time_sec;
 
 	while (!glfwWindowShouldClose(window))
 	{
 		if (gl_render())
+		{
+			glfwSetWindowTitle(window, had_underflow ? "ve2 - UNDERFLOW" : string("ve2 - " + to_string(frames_queue.size()) + " queued frames").c_str());
+			had_underflow = false;
 			glfwSwapBuffers(window);
+		}
 
 		glfwPollEvents();
 	}
