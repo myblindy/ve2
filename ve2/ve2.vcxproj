@@ -158,6 +158,7 @@
     <ClCompile Include="shader_programs.ixx" />
     <ClCompile Include="utilities.ixx" />
     <ClCompile Include="ve2.cpp" />
+    <ClCompile Include="vertex_arrays.ixx" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="ve2.rc" />

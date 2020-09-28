@@ -2,6 +2,7 @@
 //
 
 import shader_programs;
+import vertex_arrays;
 import utilities;
 
 #include "framework.h"
@@ -135,8 +136,9 @@ int av_open(const char* url)
 }
 
 unique_ptr<ShaderProgram> shader_program;
+unique_ptr<VertexArray> video_vertex_array;
 constexpr int yuv_planar_textures_count = 3;
-GLuint vertex_buffer_object_name, vertex_array_object_name, yuv_planar_texture_names[yuv_planar_textures_count];
+GLuint yuv_planar_texture_names[yuv_planar_textures_count];
 
 #pragma pack(push, 1)
 struct Vertex
@@ -188,6 +190,9 @@ int gl_init()
 	CHECK_SUCCESS(!glewInit(), "Could not initialize GLEW.");
 
 	// shaders
+	string yuv_rgb_color_transform_matrix = codec_decoder_context->colorspace != AVCOL_SPC_BT709
+		? "1, 1, 1, 0, -0.39465, 2.03211, 1.13983, -0.58060, 0"
+		: "1, 1, 1, 0, -0.21482, 2.12798, 1.28033, -0.38059, 0";
 	shader_program = link_shader_program_from_shader_objects(
 		compile_shader_from_source("\
 			#version 460 \n\
@@ -200,7 +205,7 @@ int gl_init()
 				fs_uv = uv; \n\
 				gl_Position = vec4(position, 0, 1) * transform_matrix; \n\
 			}", ShaderType::Vertex),
-		compile_shader_from_source("\
+		compile_shader_from_source(("\
 			#version 460 \n\
 			uniform sampler2D y_texture, u_texture, v_texture; \n\
 			in vec2 fs_uv; \n\
@@ -212,23 +217,16 @@ int gl_init()
 				yuv.x = texture2D(y_texture, fs_uv).r; \n\
 				yuv.y = texture2D(u_texture, fs_uv).r - 0.5; \n\
 				yuv.z = texture2D(v_texture, fs_uv).r - 0.5; \n\
-				rgb = mat3(1, 1, 1, 0, -0.21482, 2.12798, 1.28033, -0.38059, 0) * yuv; \n\
+				rgb = mat3(" + yuv_rgb_color_transform_matrix + ") * yuv; \n\
 				color = vec4(rgb, 1); \n\
-			}", ShaderType::Fragment));
+			}").c_str(), ShaderType::Fragment));
 	CHECK_SUCCESS(shader_program, "Could not link shader program.");
 
-	// vertices
+	// video vertices
 	Vertex vertices[] = { { vec2(-1, -1), vec2(0, 1) }, { vec2(-1, 1), vec2(0, 0) }, { vec2(1, -1), vec2(1, 1) }, { vec2(1, 1), vec2(1, 0) } };
+	video_vertex_array = create_vertex_array(vertices);
 
-	glCreateBuffers(1, &vertex_buffer_object_name);
-	glNamedBufferStorage(vertex_buffer_object_name, sizeof(vertices), vertices, 0);
-
-	glCreateVertexArrays(1, &vertex_array_object_name);
-	glVertexArrayVertexBuffer(vertex_array_object_name, 0, vertex_buffer_object_name, 0, sizeof(*vertices));
-
-	Vertex::setup_gl_array_attributes(vertex_array_object_name);
-
-	// textures
+	// video textures (3 yuv planar textures)
 	glCreateTextures(GL_TEXTURE_2D, yuv_planar_textures_count, yuv_planar_texture_names);
 	for (int i = 0; i < yuv_planar_textures_count; ++i)
 	{
@@ -243,13 +241,22 @@ int gl_init()
 	glProgramUniform1i(shader_program->program_name, shader_program->uniform_locations["u_texture"], 1);
 	glProgramUniform1i(shader_program->program_name, shader_program->uniform_locations["v_texture"], 2);
 
-	// aspect ratio transform
+	// aspect ratio transforms
 	update_aspect_ratio();
 
 	// gl state init stuff
 	glClearColor(0, 0, 0, 0);
 	glDisable(GL_CULL_FACE);
 	glDisable(GL_DEPTH_TEST);
+
+	// imgui setup
+	IMGUI_CHECKVERSION();
+	ImGui::CreateContext();
+	ImGuiIO& io = ImGui::GetIO();
+	ImGui::StyleColorsDark();
+
+	ImGui_ImplGlfw_InitForOpenGL(window, true);
+	ImGui_ImplOpenGL3_Init("#version 460");
 
 	return 0;
 }
@@ -284,8 +291,6 @@ bool gl_render()
 	glPixelStorei(GL_UNPACK_ROW_LENGTH, frame->linesize[2]);
 	glTextureSubImage2D(yuv_planar_texture_names[2], 0, 0, 0, video_stream->codecpar->width / 2, video_stream->codecpar->height / 2, GL_RED, GL_UNSIGNED_BYTE, frame->data[2]);
 
-	av_frame_free(&frame);
-
 	// notify the decoder thread that we consumed a frame
 	frames_queue_cv.notify_all();
 
@@ -295,12 +300,32 @@ bool gl_render()
 	glClear(GL_COLOR_BUFFER_BIT);
 
 	glUseProgram(shader_program->program_name);
-	glBindVertexArray(vertex_array_object_name);
+	glBindVertexArray(video_vertex_array->vertex_array_object_name);
 	glActiveTexture(GL_TEXTURE0); glBindTexture(GL_TEXTURE_2D, yuv_planar_texture_names[0]);
 	glActiveTexture(GL_TEXTURE1); glBindTexture(GL_TEXTURE_2D, yuv_planar_texture_names[1]);
 	glActiveTexture(GL_TEXTURE2); glBindTexture(GL_TEXTURE_2D, yuv_planar_texture_names[2]);
 	glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
 
+	// Start the Dear ImGui frame
+	ImGui_ImplOpenGL3_NewFrame();
+	ImGui_ImplGlfw_NewFrame();
+	ImGui::NewFrame();
+
+	// draw the ImGui gui
+	{
+		ImGui::SetNextWindowSize(ImVec2(window_width, 0));
+		ImGui::SetNextWindowPos(ImVec2(0, 0));
+		ImGui::Begin("Hello, world!", nullptr, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoDecoration);
+		float f = frame->best_effort_timestamp * av_q2d(video_stream->time_base);
+		ImGui::SliderFloat("float", &f, 0.0f, video_stream->duration * av_q2d(video_stream->time_base));
+		ImGui::End();
+	}
+
+	// render the gui
+	ImGui::Render();
+	ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+
+	av_frame_free(&frame);
 	return true;
 }
 
@@ -313,13 +338,12 @@ int main(int argc, const char* argv[])
 
 	while (!glfwWindowShouldClose(window))
 	{
+		glfwPollEvents();
+
 		if (gl_render())
 		{
-			glfwSetWindowTitle(window, had_underflow ? "ve2 - UNDERFLOW" : string("ve2 - " + to_string(frames_queue.size()) + " queued frames").c_str());
 			had_underflow = false;
 			glfwSwapBuffers(window);
 		}
-
-		glfwPollEvents();
 	}
 }

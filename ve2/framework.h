@@ -21,6 +21,10 @@ extern "C"
 #pragma comment(lib, "opengl32")
 
 
+#include "imgui.h"
+#include "imgui_impl_glfw.h"
+#include "imgui_impl_opengl3.h"
+
 extern "C"
 {
 #include <libavcodec/avcodec.h>

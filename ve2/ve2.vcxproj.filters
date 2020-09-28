@@ -13,6 +13,9 @@
       <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
       <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
     </Filter>
+    <Filter Include="Source Files\render">
+      <UniqueIdentifier>{64885d02-8b22-48c6-bcda-a43ff854c6f2}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="framework.h">
@@ -29,11 +32,14 @@
     <ClCompile Include="ve2.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="shader_programs.ixx">
-      <Filter>Source Files</Filter>
-    </ClCompile>
     <ClCompile Include="Utilities.ixx">
       <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="shader_programs.ixx">
+      <Filter>Source Files\render</Filter>
+    </ClCompile>
+    <ClCompile Include="vertex_arrays.ixx">
+      <Filter>Source Files\render</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
