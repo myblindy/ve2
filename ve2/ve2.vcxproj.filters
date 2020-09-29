@@ -41,6 +41,9 @@
     <ClCompile Include="vertex_arrays.ixx">
       <Filter>Source Files\render</Filter>
     </ClCompile>
+    <ClCompile Include="gui.ixx">
+      <Filter>Source Files\render</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="ve2.rc">

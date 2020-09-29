@@ -3,6 +3,7 @@
 
 import shader_programs;
 import vertex_arrays;
+import gui;
 import utilities;
 
 #include "framework.h"
@@ -16,6 +17,7 @@ char av_error_buffer[2048];
 
 GLFWwindow* window;
 int window_width, window_height;
+GLFWframebuffersizefun previous_framebuffer_size_callback;
 
 AVFormatContext* format_context{};
 AVFrame* input_frame;
@@ -135,11 +137,6 @@ int av_open(const char* url)
 		return 0;
 }
 
-unique_ptr<ShaderProgram> shader_program;
-unique_ptr<VertexArray> video_vertex_array;
-constexpr int yuv_planar_textures_count = 3;
-GLuint yuv_planar_texture_names[yuv_planar_textures_count];
-
 #pragma pack(push, 1)
 struct Vertex
 {
@@ -158,6 +155,11 @@ struct Vertex
 };
 #pragma pack(pop)
 
+unique_ptr<ShaderProgram> shader_program;
+unique_ptr<VertexArray<Vertex>> video_vertex_array;
+constexpr int yuv_planar_textures_count = 3;
+GLuint yuv_planar_texture_names[yuv_planar_textures_count];
+
 void update_aspect_ratio()
 {
 	float ar_window = (float)window_width / window_height, ar_video = (float)video_stream->codecpar->width / video_stream->codecpar->height;
@@ -165,10 +167,11 @@ void update_aspect_ratio()
 		ar_window < ar_video ? vec3(1, ar_window / ar_video, 1) : vec3(ar_video / ar_window, 1, 1))));
 }
 
-void window_size_callback(GLFWwindow* window, int width, int height)
+void framebuffer_size_callback(GLFWwindow* window, int width, int height)
 {
 	glViewport(0, 0, window_width = width, window_height = height);
 	update_aspect_ratio();
+	if (previous_framebuffer_size_callback) previous_framebuffer_size_callback(window, width, height);
 }
 
 int gl_init()
@@ -181,8 +184,8 @@ int gl_init()
 	glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
 
 	window = glfwCreateWindow(800, 600, ApplicationName, nullptr, nullptr);
-	glfwGetWindowSize(window, &window_width, &window_height);
-	glfwSetWindowSizeCallback(window, window_size_callback);
+	glfwGetFramebufferSize(window, &window_width, &window_height);
+	previous_framebuffer_size_callback = glfwSetFramebufferSizeCallback(window, framebuffer_size_callback);
 	CHECK_SUCCESS(window, "Could not create window.");
 	glfwMakeContextCurrent(window);
 
@@ -223,8 +226,8 @@ int gl_init()
 	CHECK_SUCCESS(shader_program, "Could not link shader program.");
 
 	// video vertices
-	Vertex vertices[] = { { vec2(-1, -1), vec2(0, 1) }, { vec2(-1, 1), vec2(0, 0) }, { vec2(1, -1), vec2(1, 1) }, { vec2(1, 1), vec2(1, 0) } };
-	video_vertex_array = create_vertex_array(vertices);
+	Vertex vertices[] = { { vec2(-1, -1), vec2(0, 0) }, { vec2(-1, 1), vec2(0, 1) }, { vec2(1, -1), vec2(1, 0) }, { vec2(1, 1), vec2(1, 1) } };
+	video_vertex_array = VertexArray<Vertex>::create(vertices);
 
 	// video textures (3 yuv planar textures)
 	glCreateTextures(GL_TEXTURE_2D, yuv_planar_textures_count, yuv_planar_texture_names);
@@ -244,19 +247,13 @@ int gl_init()
 	// aspect ratio transforms
 	update_aspect_ratio();
 
+	gui_init(window);
+
 	// gl state init stuff
 	glClearColor(0, 0, 0, 0);
 	glDisable(GL_CULL_FACE);
 	glDisable(GL_DEPTH_TEST);
-
-	// imgui setup
-	IMGUI_CHECKVERSION();
-	ImGui::CreateContext();
-	ImGuiIO& io = ImGui::GetIO();
-	ImGui::StyleColorsDark();
-
-	ImGui_ImplGlfw_InitForOpenGL(window, true);
-	ImGui_ImplOpenGL3_Init("#version 460");
+	glClipControl(GL_UPPER_LEFT, GL_NEGATIVE_ONE_TO_ONE);
 
 	return 0;
 }
@@ -306,24 +303,8 @@ bool gl_render()
 	glActiveTexture(GL_TEXTURE2); glBindTexture(GL_TEXTURE_2D, yuv_planar_texture_names[2]);
 	glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
 
-	// Start the Dear ImGui frame
-	ImGui_ImplOpenGL3_NewFrame();
-	ImGui_ImplGlfw_NewFrame();
-	ImGui::NewFrame();
-
-	// draw the ImGui gui
-	{
-		ImGui::SetNextWindowSize(ImVec2(window_width, 0));
-		ImGui::SetNextWindowPos(ImVec2(0, 0));
-		ImGui::Begin("Hello, world!", nullptr, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoDecoration);
-		float f = frame->best_effort_timestamp * av_q2d(video_stream->time_base);
-		ImGui::SliderFloat("float", &f, 0.0f, video_stream->duration * av_q2d(video_stream->time_base));
-		ImGui::End();
-	}
-
-	// render the gui
-	ImGui::Render();
-	ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+	//float f = frame->best_effort_timestamp * av_q2d(video_stream->time_base);
+	//ImGui::SliderFloat("float", &f, 0.0f, video_stream->duration * av_q2d(video_stream->time_base));
 
 	av_frame_free(&frame);
 	return true;
