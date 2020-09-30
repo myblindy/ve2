@@ -174,6 +174,12 @@ void framebuffer_size_callback(GLFWwindow* window, int width, int height)
 	if (previous_framebuffer_size_callback) previous_framebuffer_size_callback(window, width, height);
 }
 
+void debug_message_callback(GLenum source, GLenum type, GLuint id, GLenum severity, GLsizei length, const GLchar* message, const void* userParam)
+{
+	if (severity > GL_DEBUG_SEVERITY_NOTIFICATION)
+		cerr << "GL ERROR " << message << " type " << type << " severity " << severity << " source " << source << "\n";
+}
+
 int gl_init()
 {
 	CHECK_SUCCESS(glfwInit(), "Could not initialize GLFW.");
@@ -192,37 +198,45 @@ int gl_init()
 	glewExperimental = GL_TRUE;
 	CHECK_SUCCESS(!glewInit(), "Could not initialize GLEW.");
 
+#ifdef _DEBUG
+	glEnable(GL_DEBUG_OUTPUT);
+	glEnable(GL_DEBUG_OUTPUT_SYNCHRONOUS);
+	glDebugMessageCallback(debug_message_callback, nullptr);
+#endif
+
 	// shaders
 	string yuv_rgb_color_transform_matrix = codec_decoder_context->colorspace != AVCOL_SPC_BT709
 		? "1, 1, 1, 0, -0.39465, 2.03211, 1.13983, -0.58060, 0"
 		: "1, 1, 1, 0, -0.21482, 2.12798, 1.28033, -0.38059, 0";
 	shader_program = link_shader_program_from_shader_objects(
-		compile_shader_from_source("\
-			#version 460 \n\
-			uniform mat4 transform_matrix; \n\
-			in vec2 position, uv; \n\
-			out vec2 fs_uv; \n\
-			\n\
-			void main() \n\
-			{ \n\
-				fs_uv = uv; \n\
-				gl_Position = vec4(position, 0, 1) * transform_matrix; \n\
-			}", ShaderType::Vertex),
-		compile_shader_from_source(("\
-			#version 460 \n\
-			uniform sampler2D y_texture, u_texture, v_texture; \n\
-			in vec2 fs_uv; \n\
-			out vec4 color; \n\
-			\n\
-			void main() \n\
-			{ \n\
-				vec3 yuv, rgb; \n\
-				yuv.x = texture2D(y_texture, fs_uv).r; \n\
-				yuv.y = texture2D(u_texture, fs_uv).r - 0.5; \n\
-				yuv.z = texture2D(v_texture, fs_uv).r - 0.5; \n\
-				rgb = mat3(" + yuv_rgb_color_transform_matrix + ") * yuv; \n\
-				color = vec4(rgb, 1); \n\
-			}").c_str(), ShaderType::Fragment));
+		{
+			compile_shader_from_source("\
+				#version 460 \n\
+				uniform mat4 transform_matrix; \n\
+				in vec2 position, uv; \n\
+				out vec2 fs_uv; \n\
+				\n\
+				void main() \n\
+				{ \n\
+					fs_uv = uv; \n\
+					gl_Position = vec4(position, 0, 1) * transform_matrix; \n\
+				}", ShaderType::Vertex),
+			compile_shader_from_source(("\
+				#version 460 \n\
+				uniform sampler2D y_texture, u_texture, v_texture; \n\
+				in vec2 fs_uv; \n\
+				out vec4 color; \n\
+				\n\
+				void main() \n\
+				{ \n\
+					vec3 yuv, rgb; \n\
+					yuv.x = texture2D(y_texture, fs_uv).r; \n\
+					yuv.y = texture2D(u_texture, fs_uv).r - 0.5; \n\
+					yuv.z = texture2D(v_texture, fs_uv).r - 0.5; \n\
+					rgb = mat3(" + yuv_rgb_color_transform_matrix + ") * yuv; \n\
+					color = vec4(rgb, 1); \n\
+				}").c_str(), ShaderType::Fragment)
+		});
 	CHECK_SUCCESS(shader_program, "Could not link shader program.");
 
 	// video vertices
@@ -303,8 +317,9 @@ bool gl_render()
 	glActiveTexture(GL_TEXTURE2); glBindTexture(GL_TEXTURE_2D, yuv_planar_texture_names[2]);
 	glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
 
-	//float f = frame->best_effort_timestamp * av_q2d(video_stream->time_base);
-	//ImGui::SliderFloat("float", &f, 0.0f, video_stream->duration * av_q2d(video_stream->time_base));
+	auto f = frame->best_effort_timestamp * av_q2d(video_stream->time_base);
+	gui_slider(ivec2{}, ivec2{ 100, 15 }, 0.0f, video_stream->duration * av_q2d(video_stream->time_base), f);
+	gui_render();
 
 	av_frame_free(&frame);
 	return true;

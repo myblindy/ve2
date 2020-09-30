@@ -6,17 +6,20 @@ module;
 #include <string>
 #include <iostream>
 #include <unordered_map>
+#include <initializer_list>
 
 export module shader_programs;
+
+using namespace std;
 
 export struct ShaderProgram
 {
 	int program_name;
-	std::unordered_map<std::string, int> uniform_locations;
+	unordered_map<string, int> uniform_locations;
 };
 
 export enum class ShaderType { Vertex = GL_VERTEX_SHADER, Fragment = GL_FRAGMENT_SHADER };
-export GLuint compile_shader_from_source(const std::string source, const ShaderType type)
+export GLuint compile_shader_from_source(const string source, const ShaderType type)
 {
 	const auto shader = glCreateShader(static_cast<GLenum>(type));
 
@@ -32,42 +35,27 @@ export GLuint compile_shader_from_source(const std::string source, const ShaderT
 		GLint size{};
 		glGetShaderiv(shader, GL_INFO_LOG_LENGTH, &size);
 
-		std::string info_log;
+		string info_log;
 		info_log.resize(size);
 		glGetShaderInfoLog(shader, size, nullptr, info_log.data());
 
-		std::cerr << "Shader compilation errors:\n" << info_log << std::endl;
+		cerr << "Shader compilation errors:\n" << info_log << endl;
 		return -1;
 	}
 
 	return shader;
 }
 
-template<class... Tail>
-void attach_shaders(const GLuint shader_program, const GLuint head_shader, Tail... tail_shaders)
+export unique_ptr<ShaderProgram> link_shader_program_from_shader_objects(initializer_list<GLuint> shader_names)
 {
-	glAttachShader(shader_program, head_shader);
-	if constexpr (sizeof...(tail_shaders))
-		attach_shaders(shader_program, tail_shaders...);
-}
+	for (auto shader_name : shader_names)
+		if (shader_name == UINT32_MAX)
+			return nullptr;
 
-template<class... Tail>
-void delete_shaders(const GLuint head_shader, Tail... tail_shaders)
-{
-	glDeleteShader(head_shader);
-	if constexpr (sizeof...(tail_shaders))
-		delete_shaders(tail_shaders...);
-}
-
-template<class Head, class... Tail>
-using are_same = std::conjunction<std::is_same<Head, Tail>...>;
-
-export template<class... Tail, class = std::enable_if_t<are_same<GLuint, Tail...>::value, void>>
-std::unique_ptr<ShaderProgram> link_shader_program_from_shader_objects(GLuint head_shader, Tail... tail_shaders)
-{
 	const auto shader_program = glCreateProgram();
 
-	attach_shaders(shader_program, head_shader, tail_shaders...);
+	for (auto shader_name : shader_names)
+		glAttachShader(shader_program, shader_name);
 
 	glLinkProgram(shader_program);
 
@@ -78,17 +66,18 @@ std::unique_ptr<ShaderProgram> link_shader_program_from_shader_objects(GLuint he
 		GLint size{};
 		glGetProgramiv(shader_program, GL_INFO_LOG_LENGTH, &size);
 
-		std::string info_log;
+		string info_log;
 		info_log.resize(size);
 		glGetProgramInfoLog(shader_program, size, nullptr, info_log.data());
 
-		std::cerr << "Program compilation errors:\n" << info_log << std::endl;
+		cerr << "Program compilation errors:\n" << info_log << endl;
 		return nullptr;
 	}
 
-	delete_shaders(head_shader, tail_shaders...);
+	for (auto shader_name : shader_names)
+		glDeleteShader(shader_name);
 
-	auto result = std::make_unique<ShaderProgram>();
+	auto result = make_unique<ShaderProgram>();
 	result->program_name = shader_program;
 
 	GLint uniforms_count{};
