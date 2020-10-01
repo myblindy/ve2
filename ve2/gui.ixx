@@ -17,13 +17,14 @@ using namespace glm;
 
 namespace priv
 {
+#pragma pack(push, 1)
 	struct Vertex
 	{
-		ivec2 position;
+		vec2 position;
 		vec2 uv;
 		vec4 color;
 
-		Vertex(const ivec2& position, const vec2& uv, const vec4& color)
+		Vertex(const vec2& position, const vec2& uv, const vec4& color)
 			:position(position), uv(uv), color(color)
 		{
 		}
@@ -31,7 +32,7 @@ namespace priv
 		static void setup_gl_array_attributes(GLuint vertex_array_object_name)
 		{
 			glEnableVertexArrayAttrib(vertex_array_object_name, 0);
-			glVertexArrayAttribFormat(vertex_array_object_name, 0, 2, GL_INT, false, offsetof(Vertex, position));
+			glVertexArrayAttribFormat(vertex_array_object_name, 0, 2, GL_FLOAT, false, offsetof(Vertex, position));
 			glVertexArrayAttribBinding(vertex_array_object_name, 0, 0);
 
 			glEnableVertexArrayAttrib(vertex_array_object_name, 1);
@@ -43,13 +44,14 @@ namespace priv
 			glVertexArrayAttribBinding(vertex_array_object_name, 2, 0);
 		}
 	};
+#pragma pack(pop)
 
 	unique_ptr<VertexArray<Vertex>> vertex_array;
 	unique_ptr<ShaderProgram> shader_program;
 	vector<Vertex> vertex_cache;									// the vertex cache that stores the gui vertices as they are being build
 	optional<uint64_t> last_vertex_cache_hash;						// the hash of the vertex cache that was previously uploaded, if any
 	GLFWframebuffersizefun previous_framebuffer_size_callback;
-	ivec2 framebuffer_size{}, previous_framebuffer_size{};
+	vec2 framebuffer_size{}, previous_framebuffer_size{};
 }
 
 using namespace priv;
@@ -65,7 +67,7 @@ namespace std
 			const hash<int> hash_int;
 			const hash<float> hash_float;
 
-			return (((((((239811 + hash_int(vertex.position.x) * 324871) + hash_int(vertex.position.y) * 324871) +
+			return (((((((239811 + hash_float(vertex.position.x) * 324871) + hash_float(vertex.position.y) * 324871) +
 				hash_float(vertex.uv.x) * 324871) + hash_float(vertex.uv.y) * 324871) +
 				hash_float(vertex.color.r) * 324871) + hash_float(vertex.color.g) * 324871) + hash_float(vertex.color.b) * 324871) + hash_float(vertex.color.a) * 324871;
 		}
@@ -101,9 +103,9 @@ export int gui_init(GLFWwindow* window)
 		{
 			compile_shader_from_source("\
 				#version 460 \n\
-				uniform ivec2 window_size; \n\
+				uniform vec2 window_size; \n\
 				\n\
-				in ivec2 position; \n\
+				in vec2 position; \n\
 				in vec2 uv; \n\
 				in vec4 color; \n\
 				\n\
@@ -113,7 +115,7 @@ export int gui_init(GLFWwindow* window)
 				{ \n\
 					fs_uv = uv; \n\
 					fs_color = color; \n\
-					gl_Position = vec4(position / window_size, 0, 1); \n\
+					gl_Position = vec4(position.x / window_size.x * 2.0 - 1.0, position.y / window_size.y * 2.0 - 1.0, 0, 1); \n\
 				}", ShaderType::Vertex),
 			compile_shader_from_source("\
 				#version 460 \n\
@@ -130,7 +132,9 @@ export int gui_init(GLFWwindow* window)
 
 	// register a callback to keep the window size updated
 	previous_framebuffer_size_callback = glfwSetFramebufferSizeCallback(window, framebuffer_size_callback);
-	glfwGetFramebufferSize(window, &framebuffer_size.x, &framebuffer_size.y);
+	int x, y;
+	glfwGetFramebufferSize(window, &x, &y);
+	framebuffer_size = { x, y };
 
 	return 0;
 }
@@ -149,37 +153,40 @@ export int gui_render()
 	if (previous_framebuffer_size != framebuffer_size)
 	{
 		// the framebuffer size has changed, upload it to the program
-		glUniform2iv(shader_program->uniform_locations["window_size"], 1, &framebuffer_size.x);
+		glUniform2f(shader_program->uniform_locations["window_size"], framebuffer_size.x, framebuffer_size.y);
 		previous_framebuffer_size = framebuffer_size;
 	}
 
 	if (vertex_array->size())
+	{
+		glBindVertexArray(vertex_array->vertex_array_object_name);
 		glDrawArrays(GL_TRIANGLES, 0, vertex_array->size());
+	}
 
 	vertex_cache.clear();
 
 	return 0;
 }
 
-void quad(ivec2 position, ivec2 size, vec4 color)
+void quad(vec2 position, vec2 size, vec4 color)
 {
-	vertex_cache.emplace_back(ivec2(position.x, position.y), vec2(0, 0), color);
-	vertex_cache.emplace_back(ivec2(position.x + 1, position.y), vec2(1, 0), color);
-	vertex_cache.emplace_back(ivec2(position.x + 1, position.y + 1), vec2(1, 1), color);
+	vertex_cache.emplace_back(vec2(position.x, position.y), vec2(0, 0), color);
+	vertex_cache.emplace_back(vec2(position.x + size.x, position.y + size.y), vec2(1, 1), color);
+	vertex_cache.emplace_back(vec2(position.x + size.x, position.y), vec2(1, 0), color);
 
-	vertex_cache.emplace_back(ivec2(position.x + 1, position.y), vec2(1, 0), color);
-	vertex_cache.emplace_back(ivec2(position.x + 1, position.y + 1), vec2(1, 1), color);
-	vertex_cache.emplace_back(ivec2(position.x, position.y + 1), vec2(0, 1), color);
+	vertex_cache.emplace_back(ivec2(position.x, position.y + size.y), vec2(0, 1), color);
+	vertex_cache.emplace_back(ivec2(position.x + size.x, position.y + size.y), vec2(1, 1), color);
+	vertex_cache.emplace_back(ivec2(position.x, position.y), vec2(0, 0), color);
 }
 
-export int gui_slider(const ivec2& position, const ivec2& size, const double min, const double max, const double val)
+export int gui_slider(const vec2& position, const vec2& size, const double min, const double max, const double val)
 {
 	// the outer rectangle
-	quad(position, size, vec4(1, 0, 0, 1));
+	quad(position, size, vec4(0, 1, 0, 1));
 
 	// the thumb
 	double percentage = (val - min) / (max - min);
-	quad(vec2((size.x - size.y) * percentage + position.x + size.y / 2, position.y), vec2(size.y, size.y), vec4(1, 1, 1, 1));
+	quad(vec2((size.x - size.y) * percentage + position.x, position.y), vec2(size.y, size.y), vec4(1, 1, 1, 1));
 
 	return 0;
 }

@@ -317,8 +317,8 @@ bool gl_render()
 	glActiveTexture(GL_TEXTURE2); glBindTexture(GL_TEXTURE_2D, yuv_planar_texture_names[2]);
 	glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
 
-	auto f = frame->best_effort_timestamp * av_q2d(video_stream->time_base);
-	gui_slider(ivec2{}, ivec2{ 100, 15 }, 0.0f, video_stream->duration * av_q2d(video_stream->time_base), f);
+	//auto f = frame->best_effort_timestamp * av_q2d(video_stream->time_base);
+	gui_slider(vec2{}, vec2{ window_width, 15 }, 0.0f, video_stream->duration, frame->best_effort_timestamp);
 	gui_render();
 
 	av_frame_free(&frame);
