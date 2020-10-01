@@ -168,15 +168,15 @@ export int gui_render()
 	return 0;
 }
 
-void quad(vec2 position, vec2 size, vec4 color)
+void quad(const vec2 &position, const vec2 &size, const vec4 &color)
 {
 	vertex_cache.emplace_back(vec2(position.x, position.y), vec2(0, 0), color);
 	vertex_cache.emplace_back(vec2(position.x + size.x, position.y + size.y), vec2(1, 1), color);
 	vertex_cache.emplace_back(vec2(position.x + size.x, position.y), vec2(1, 0), color);
 
-	vertex_cache.emplace_back(ivec2(position.x, position.y + size.y), vec2(0, 1), color);
-	vertex_cache.emplace_back(ivec2(position.x + size.x, position.y + size.y), vec2(1, 1), color);
-	vertex_cache.emplace_back(ivec2(position.x, position.y), vec2(0, 0), color);
+	vertex_cache.emplace_back(vec2(position.x, position.y + size.y), vec2(0, 1), color);
+	vertex_cache.emplace_back(vec2(position.x + size.x, position.y + size.y), vec2(1, 1), color);
+	vertex_cache.emplace_back(vec2(position.x, position.y), vec2(0, 0), color);
 }
 
 export int gui_slider(const vec2& position, const vec2& size, const double min, const double max, const double val)
