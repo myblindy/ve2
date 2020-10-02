@@ -9,8 +9,8 @@ module;
 
 export module gui;
 
-import shader_programs;
-import vertex_arrays;
+import shader_program;
+import vertex_array;
 
 using namespace std;
 using namespace glm;
@@ -64,7 +64,6 @@ namespace std
 	{
 		size_t operator()(Vertex const& vertex) const noexcept
 		{
-			const hash<int> hash_int;
 			const hash<float> hash_float;
 
 			return (((((((239811 + hash_float(vertex.position.x) * 324871) + hash_float(vertex.position.y) * 324871) +
@@ -132,6 +131,7 @@ export int gui_init(GLFWwindow* window)
 
 	// register a callback to keep the window size updated
 	previous_framebuffer_size_callback = glfwSetFramebufferSizeCallback(window, framebuffer_size_callback);
+
 	int x, y;
 	glfwGetFramebufferSize(window, &x, &y);
 	framebuffer_size = { x, y };

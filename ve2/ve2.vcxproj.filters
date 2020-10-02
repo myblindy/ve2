@@ -16,6 +16,9 @@
     <Filter Include="Source Files\render">
       <UniqueIdentifier>{64885d02-8b22-48c6-bcda-a43ff854c6f2}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Source Files\render\helpers">
+      <UniqueIdentifier>{1c2ab962-ba13-4bea-8f21-2413321c0ed2}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="framework.h">
@@ -27,6 +30,30 @@
     <ClInclude Include="Resource.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="mapbox\glyph_foundry.hpp">
+      <Filter>Source Files\render\helpers</Filter>
+    </ClInclude>
+    <ClInclude Include="mapbox\glyph_foundry_impl.hpp">
+      <Filter>Source Files\render\helpers</Filter>
+    </ClInclude>
+    <ClInclude Include="agg\agg_array.h">
+      <Filter>Source Files\render\helpers</Filter>
+    </ClInclude>
+    <ClInclude Include="agg\agg_basics.h">
+      <Filter>Source Files\render\helpers</Filter>
+    </ClInclude>
+    <ClInclude Include="agg\agg_config.h">
+      <Filter>Source Files\render\helpers</Filter>
+    </ClInclude>
+    <ClInclude Include="agg\agg_curves.h">
+      <Filter>Source Files\render\helpers</Filter>
+    </ClInclude>
+    <ClInclude Include="agg\agg_curves_impl.hpp">
+      <Filter>Source Files\render\helpers</Filter>
+    </ClInclude>
+    <ClInclude Include="agg\agg_math.h">
+      <Filter>Source Files\render\helpers</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="ve2.cpp">
@@ -35,13 +62,19 @@
     <ClCompile Include="Utilities.ixx">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="shader_programs.ixx">
-      <Filter>Source Files\render</Filter>
-    </ClCompile>
-    <ClCompile Include="vertex_arrays.ixx">
-      <Filter>Source Files\render</Filter>
-    </ClCompile>
     <ClCompile Include="gui.ixx">
+      <Filter>Source Files\render</Filter>
+    </ClCompile>
+    <ClCompile Include="shader_program.ixx">
+      <Filter>Source Files\render</Filter>
+    </ClCompile>
+    <ClCompile Include="vertex_array.ixx">
+      <Filter>Source Files\render</Filter>
+    </ClCompile>
+    <ClCompile Include="growable_texture_atlas.ixx">
+      <Filter>Source Files\render</Filter>
+    </ClCompile>
+    <ClCompile Include="sdf_font.ixx">
       <Filter>Source Files\render</Filter>
     </ClCompile>
   </ItemGroup>

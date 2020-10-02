@@ -1,8 +1,8 @@
 // ve2.cpp : Defines the entry point for the application.
 //
 
-import shader_programs;
-import vertex_arrays;
+import shader_program;
+import vertex_array;
 import gui;
 import utilities;
 

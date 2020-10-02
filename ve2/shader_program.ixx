@@ -8,7 +8,7 @@ module;
 #include <unordered_map>
 #include <initializer_list>
 
-export module shader_programs;
+export module shader_program;
 
 using namespace std;
 

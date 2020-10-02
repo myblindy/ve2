@@ -150,16 +150,26 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClInclude Include="agg\agg_array.h" />
+    <ClInclude Include="agg\agg_basics.h" />
+    <ClInclude Include="agg\agg_config.h" />
+    <ClInclude Include="agg\agg_curves.h" />
+    <ClInclude Include="agg\agg_curves_impl.hpp" />
+    <ClInclude Include="agg\agg_math.h" />
     <ClInclude Include="framework.h" />
+    <ClInclude Include="mapbox\glyph_foundry.hpp" />
+    <ClInclude Include="mapbox\glyph_foundry_impl.hpp" />
     <ClInclude Include="Resource.h" />
     <ClInclude Include="targetver.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="gui.ixx" />
-    <ClCompile Include="shader_programs.ixx" />
+    <ClCompile Include="sdf_font.ixx" />
+    <ClCompile Include="shader_program.ixx" />
+    <ClCompile Include="growable_texture_atlas.ixx" />
     <ClCompile Include="utilities.ixx" />
     <ClCompile Include="ve2.cpp" />
-    <ClCompile Include="vertex_arrays.ixx" />
+    <ClCompile Include="vertex_array.ixx" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="ve2.rc" />
