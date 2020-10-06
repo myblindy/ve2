@@ -7,6 +7,7 @@ import gui;
 import utilities;
 
 #include "framework.h"
+#include "sdf_font.h"
 
 using namespace std;
 using namespace glm;
@@ -18,6 +19,7 @@ char av_error_buffer[2048];
 GLFWwindow* window;
 int window_width, window_height;
 GLFWframebuffersizefun previous_framebuffer_size_callback;
+shared_ptr<Font> font;
 
 AVFormatContext* format_context{};
 AVFrame* input_frame;
@@ -198,6 +200,8 @@ int gl_init()
 	glewExperimental = GL_TRUE;
 	CHECK_SUCCESS(!glewInit(), "Could not initialize GLEW.");
 
+	font = make_shared<Font>("content\\OpenSans-Regular.ttf", 64);
+
 #ifdef _DEBUG
 	glEnable(GL_DEBUG_OUTPUT);
 	glEnable(GL_DEBUG_OUTPUT_SYNCHRONOUS);
@@ -261,7 +265,7 @@ int gl_init()
 	// aspect ratio transforms
 	update_aspect_ratio();
 
-	gui_init(window);
+	gui_init(window, font);
 
 	// gl state init stuff
 	glClearColor(0, 0, 0, 0);
@@ -318,7 +322,8 @@ bool gl_render()
 	glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
 
 	//auto f = frame->best_effort_timestamp * av_q2d(video_stream->time_base);
-	gui_slider(vec2{}, vec2{ window_width, 15 }, 0.0f, video_stream->duration, frame->best_effort_timestamp);
+	gui_slider(vec2{}, { window_width, 15 }, 0.0f, video_stream->duration, frame->best_effort_timestamp);
+	gui_label({ 0, 30 }, u8"meep");
 	gui_render();
 
 	av_frame_free(&frame);

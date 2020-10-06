@@ -91,6 +91,8 @@ export struct GrowableTextureAtlas
 		current_position.x += size.x;
 		current_position.y += size.y;
 		if (current_max_height < size.y) current_max_height = size.y;
+
+		return nodes.size() - 1;
 	}
 
 	vec2 get_uv(int index, int which) const { return which == 0 ? nodes[index].uv0 : nodes[index].uv1; }
@@ -101,6 +103,6 @@ private:
 
 	vector<node> nodes;
 
-	ivec2 current_position{};
+	ivec2 current_position{ 0, 0 };
 	int current_max_height{};
 };

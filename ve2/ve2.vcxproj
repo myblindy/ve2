@@ -130,6 +130,9 @@
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
     </Link>
+    <PostBuildEvent>
+      <Command>xcopy /I /E /Y /D "$(SolutionDir)content" "$(OutDirFullPath)content"</Command>
+    </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <ClCompile>
@@ -160,11 +163,12 @@
     <ClInclude Include="mapbox\glyph_foundry.hpp" />
     <ClInclude Include="mapbox\glyph_foundry_impl.hpp" />
     <ClInclude Include="Resource.h" />
+    <ClInclude Include="sdf_font.h" />
     <ClInclude Include="targetver.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="gui.ixx" />
-    <ClCompile Include="sdf_font.ixx" />
+    <ClCompile Include="sdf_font.cpp" />
     <ClCompile Include="shader_program.ixx" />
     <ClCompile Include="growable_texture_atlas.ixx" />
     <ClCompile Include="utilities.ixx" />

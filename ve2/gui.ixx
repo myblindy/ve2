@@ -6,11 +6,13 @@ module;
 #include <glm/glm.hpp>
 #include <gl/glew.h>
 #include <glfw/glfw3.h>
+#include "sdf_font.h"
 
 export module gui;
 
 import shader_program;
 import vertex_array;
+import utilities;
 
 using namespace std;
 using namespace glm;
@@ -52,6 +54,7 @@ namespace priv
 	optional<uint64_t> last_vertex_cache_hash;						// the hash of the vertex cache that was previously uploaded, if any
 	GLFWframebuffersizefun previous_framebuffer_size_callback;
 	vec2 framebuffer_size{}, previous_framebuffer_size{};
+	shared_ptr<Font> font;
 }
 
 using namespace priv;
@@ -94,15 +97,17 @@ void framebuffer_size_callback(GLFWwindow* window, int x, int y)
 	if (previous_framebuffer_size_callback) previous_framebuffer_size_callback(window, x, y);
 }
 
-export int gui_init(GLFWwindow* window)
+export int gui_init(GLFWwindow* window, shared_ptr<Font> _font)
 {
 	vertex_array = VertexArray<Vertex>::create_growable();
+	font = _font;
 
 	shader_program = link_shader_program_from_shader_objects(
 		{
 			compile_shader_from_source("\
 				#version 460 \n\
 				uniform vec2 window_size; \n\
+				uniform sampler2D tex; \n\
 				\n\
 				in vec2 position; \n\
 				in vec2 uv; \n\
@@ -113,11 +118,12 @@ export int gui_init(GLFWwindow* window)
 				void main() \n\
 				{ \n\
 					fs_uv = uv; \n\
-					fs_color = color; \n\
+					fs_color = uv.s < 0 ? color : color * texture(tex, uv); \n\
 					gl_Position = vec4(position.x / window_size.x * 2.0 - 1.0, position.y / window_size.y * 2.0 - 1.0, 0, 1); \n\
 				}", ShaderType::Vertex),
 			compile_shader_from_source("\
 				#version 460 \n\
+				\n\
 				in vec2 fs_uv; \n\
 				in vec4 fs_color; \n\
 				\n\
@@ -128,6 +134,7 @@ export int gui_init(GLFWwindow* window)
 					out_color = fs_color; \n\
 				}", ShaderType::Fragment)
 		});
+	glProgramUniform1i(shader_program->program_name, shader_program->uniform_locations["tex"], 0);
 
 	// register a callback to keep the window size updated
 	previous_framebuffer_size_callback = glfwSetFramebufferSizeCallback(window, framebuffer_size_callback);
@@ -159,6 +166,8 @@ export int gui_render()
 
 	if (vertex_array->size())
 	{
+		glActiveTexture(GL_TEXTURE0);
+		font->bind();
 		glBindVertexArray(vertex_array->vertex_array_object_name);
 		glDrawArrays(GL_TRIANGLES, 0, vertex_array->size());
 	}
@@ -168,25 +177,38 @@ export int gui_render()
 	return 0;
 }
 
-void quad(const vec2 &position, const vec2 &size, const vec4 &color)
+box2 uv_no_texture{ -1, -1 };
+void quad(const vec2& position, const vec2& size, const box2& uv, const vec4& color)
 {
-	vertex_cache.emplace_back(vec2(position.x, position.y), vec2(0, 0), color);
-	vertex_cache.emplace_back(vec2(position.x + size.x, position.y + size.y), vec2(1, 1), color);
-	vertex_cache.emplace_back(vec2(position.x + size.x, position.y), vec2(1, 0), color);
+	vertex_cache.emplace_back(vec2(position.x, position.y), uv.v0, color);
+	vertex_cache.emplace_back(vec2(position.x + size.x, position.y + size.y), uv.v1, color);
+	vertex_cache.emplace_back(vec2(position.x + size.x, position.y), vec2(uv.v1.x, uv.v0.y), color);
 
-	vertex_cache.emplace_back(vec2(position.x, position.y + size.y), vec2(0, 1), color);
-	vertex_cache.emplace_back(vec2(position.x + size.x, position.y + size.y), vec2(1, 1), color);
-	vertex_cache.emplace_back(vec2(position.x, position.y), vec2(0, 0), color);
+	vertex_cache.emplace_back(vec2(position.x, position.y + size.y), vec2(uv.v0.x, uv.v1.y), color);
+	vertex_cache.emplace_back(vec2(position.x + size.x, position.y + size.y), uv.v1, color);
+	vertex_cache.emplace_back(vec2(position.x, position.y), uv.v0, color);
 }
 
 export int gui_slider(const vec2& position, const vec2& size, const double min, const double max, const double val)
 {
 	// the outer rectangle
-	quad(position, size, vec4(0, 1, 0, 1));
+	quad(position, size, uv_no_texture, vec4(0, 1, 0, 1));
 
 	// the thumb
 	double percentage = (val - min) / (max - min);
-	quad(vec2((size.x - size.y) * percentage + position.x, position.y), vec2(size.y, size.y), vec4(1, 1, 1, 1));
+	quad(vec2((size.x - size.y) * percentage + position.x, position.y), vec2(size.y, size.y), uv_no_texture, vec4(1, 1, 1, 1));
+
+	return 0;
+}
+
+export int gui_label(const vec2& position, const u8string& s)
+{
+	float x = position.x;
+	for (const auto& glyph : font->get_glyph_data(s))
+	{
+		quad({ x, position.y }, { x + glyph.advance, position.y + 32 }, glyph.uv, vec4(1, 1, 1, 1));
+		x += glyph.advance;
+	}
 
 	return 0;
 }

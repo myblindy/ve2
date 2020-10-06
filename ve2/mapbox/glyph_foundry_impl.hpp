@@ -58,7 +58,7 @@ namespace sdf_glyph_foundry
 			user->rings.push_back(user->ring);
 			user->ring.clear();
 		}
-		user->ring.emplace_back(float(to->x) / 64.0, float(to->y) / 64.0);
+		user->ring.emplace_back(float(to->x) / 64.0f, float(to->y) / 64.0f);
 		return 0;
 	}
 
@@ -86,15 +86,15 @@ namespace sdf_glyph_foundry
 			user->ring.pop_back();
 
 			agg_fontnik::curve3_div curve(dx, dy,
-				float(control->x) / 64, float(control->y) / 64,
-				float(to->x) / 64, float(to->y) / 64);
+				static_cast<float>(control->x) / 64, static_cast<float>(control->y) / 64,
+				static_cast<float>(to->x) / 64, static_cast<float>(to->y) / 64);
 
 			curve.rewind(0);
 			double x, y;
 			unsigned cmd;
 
 			while (agg_fontnik::path_cmd_stop != (cmd = curve.vertex(&x, &y))) {
-				user->ring.emplace_back(x, y);
+				user->ring.emplace_back(static_cast<float>(x), static_cast<float>(y));
 			}
 		}
 
@@ -120,16 +120,16 @@ namespace sdf_glyph_foundry
 			user->ring.pop_back();
 
 			agg_fontnik::curve4_div curve(dx, dy,
-				float(c1->x) / 64, float(c1->y) / 64,
-				float(c2->x) / 64, float(c2->y) / 64,
-				float(to->x) / 64, float(to->y) / 64);
+				static_cast<float>(c1->x) / 64, static_cast<float>(c1->y) / 64,
+				static_cast<float>(c2->x) / 64, static_cast<float>(c2->y) / 64,
+				static_cast<float>(to->x) / 64, static_cast<float>(to->y) / 64);
 
 			curve.rewind(0);
 			double x, y;
 			unsigned cmd;
 
 			while (agg_fontnik::path_cmd_stop != (cmd = curve.vertex(&x, &y))) {
-				user->ring.emplace_back(x, y);
+				user->ring.emplace_back(static_cast<float>(x), static_cast<float>(y));
 			}
 		}
 
@@ -157,8 +157,8 @@ namespace sdf_glyph_foundry
 
 	double SquaredDistance(const Point& v, const Point& w)
 	{
-		const double a = v.get<0>() - w.get<0>();
-		const double b = v.get<1>() - w.get<1>();
+		const double a = static_cast<double>(v.get<0>()) - static_cast<double>(w.get<0>());
+		const double b = static_cast<double>(v.get<1>()) - static_cast<double>(w.get<1>());
 		return a * a + b * b;
 	}
 
@@ -194,11 +194,11 @@ namespace sdf_glyph_foundry
 		const int squared_radius = radius * radius;
 
 		std::vector<SegmentValue> results;
-		Point p0 = Point{ p.get<0>() - radius, p.get<1>() - radius };
-		Point p1 = Point{ p.get<0>() + radius, p.get<1>() + radius };
-		Box box = Box{ p0, p1 };
-		auto bi = std::back_inserter(results);
-		auto pred = bgi::intersects(box);
+		const Point p0 = Point{ p.get<0>() - radius, p.get<1>() - radius };
+		const Point p1 = Point{ p.get<0>() + radius, p.get<1>() + radius };
+		const Box box = Box{ p0, p1 };
+		const auto bi = std::back_inserter(results);
+		const auto pred = bgi::intersects(box);
 		tree.query(pred, bi);
 
 		double squared_distance = std::numeric_limits<double>::infinity();
@@ -217,148 +217,147 @@ namespace sdf_glyph_foundry
 	}
 
 	void RenderSDF(glyph_info& glyph,
-		int size,
 		int buffer,
 		float cutoff,
 		FT_Face ft_face)
 	{
 
-		//if (FT_Load_Glyph(ft_face, glyph.glyph_index, FT_LOAD_NO_HINTING)) {
-		//	return;
-		//}
+		if (FT_Load_Glyph(ft_face, glyph.glyph_index, FT_LOAD_NO_HINTING)) {
+			return;
+		}
 
-		//const int advance = ft_face->glyph->metrics.horiAdvance / 64;
-		//const int ascender = ft_face->size->metrics.ascender / 64;
-		//const int descender = ft_face->size->metrics.descender / 64;
+		const int advance = ft_face->glyph->metrics.horiAdvance / 64;
+		const int ascender = ft_face->size->metrics.ascender / 64;
+		const int descender = ft_face->size->metrics.descender / 64;
 
-		//glyph.line_height = ft_face->size->metrics.height;
-		//glyph.advance = advance;
-		//glyph.ascender = ascender;
-		//glyph.descender = descender;
+		glyph.line_height = ft_face->size->metrics.height;
+		glyph.advance = advance;
+		glyph.ascender = ascender;
+		glyph.descender = descender;
 
-		//FT_Outline_Funcs func_interface = {
-		//	.move_to = &MoveTo,
-		//	.line_to = &LineTo,
-		//	.conic_to = &ConicTo,
-		//	.cubic_to = &CubicTo,
-		//	.shift = 0,
-		//	.delta = 0
-		//};
+		FT_Outline_Funcs func_interface = {
+			.move_to = &MoveTo,
+			.line_to = &LineTo,
+			.conic_to = &ConicTo,
+			.cubic_to = &CubicTo,
+			.shift = 0,
+			.delta = 0
+		};
 
-		//User user;
+		User user;
 
-		//if (ft_face->glyph->format == FT_GLYPH_FORMAT_OUTLINE) {
-		//	// Decompose outline into bezier curves and line segments
-		//	FT_Outline outline = ft_face->glyph->outline;
-		//	if (FT_Outline_Decompose(&outline, &func_interface, &user)) return;
+		if (ft_face->glyph->format == FT_GLYPH_FORMAT_OUTLINE) {
+			// Decompose outline into bezier curves and line segments
+			FT_Outline outline = ft_face->glyph->outline;
+			if (FT_Outline_Decompose(&outline, &func_interface, &user)) return;
 
-		//	if (!user.ring.empty()) {
-		//		CloseRing(user.ring);
-		//		user.rings.push_back(user.ring);
-		//	}
+			if (!user.ring.empty()) {
+				CloseRing(user.ring);
+				user.rings.push_back(user.ring);
+			}
 
-		//	if (user.rings.empty()) {
-		//		return;
-		//	}
-		//}
-		//else {
-		//	return;
-		//}
+			if (user.rings.empty()) {
+				return;
+			}
+		}
+		else {
+			return;
+		}
 
-		//// Calculate the real glyph bbox.
-		//double bbox_xmin = std::numeric_limits<double>::infinity(),
-		//	bbox_ymin = std::numeric_limits<double>::infinity();
+		// Calculate the real glyph bbox.
+		double bbox_xmin = std::numeric_limits<double>::infinity(),
+			bbox_ymin = std::numeric_limits<double>::infinity();
 
-		//double bbox_xmax = -std::numeric_limits<double>::infinity(),
-		//	bbox_ymax = -std::numeric_limits<double>::infinity();
+		double bbox_xmax = -std::numeric_limits<double>::infinity(),
+			bbox_ymax = -std::numeric_limits<double>::infinity();
 
-		//for (const Points& ring : user.rings) {
-		//	for (const Point& point : ring) {
-		//		if (point.get<0>() > bbox_xmax) bbox_xmax = point.get<0>();
-		//		if (point.get<0>() < bbox_xmin) bbox_xmin = point.get<0>();
-		//		if (point.get<1>() > bbox_ymax) bbox_ymax = point.get<1>();
-		//		if (point.get<1>() < bbox_ymin) bbox_ymin = point.get<1>();
-		//	}
-		//}
+		for (const Points& ring : user.rings) {
+			for (const Point& point : ring) {
+				if (point.get<0>() > bbox_xmax) bbox_xmax = point.get<0>();
+				if (point.get<0>() < bbox_xmin) bbox_xmin = point.get<0>();
+				if (point.get<1>() > bbox_ymax) bbox_ymax = point.get<1>();
+				if (point.get<1>() < bbox_ymin) bbox_ymin = point.get<1>();
+			}
+		}
 
-		//bbox_xmin = std::round(bbox_xmin);
-		//bbox_ymin = std::round(bbox_ymin);
-		//bbox_xmax = std::round(bbox_xmax);
-		//bbox_ymax = std::round(bbox_ymax);
+		bbox_xmin = std::round(bbox_xmin);
+		bbox_ymin = std::round(bbox_ymin);
+		bbox_xmax = std::round(bbox_xmax);
+		bbox_ymax = std::round(bbox_ymax);
 
-		//// Offset so that glyph outlines are in the bounding box.
-		//for (Points& ring : user.rings) {
-		//	for (Point& point : ring) {
-		//		point.set<0>(float(point.get<0>() + -bbox_xmin + buffer));
-		//		point.set<1>(float(point.get<1>() + -bbox_ymin + buffer));
-		//	}
-		//}
+		// Offset so that glyph outlines are in the bounding box.
+		for (Points& ring : user.rings) {
+			for (Point& point : ring) {
+				point.set<0>(float(point.get<0>() + -bbox_xmin + buffer));
+				point.set<1>(float(point.get<1>() + -bbox_ymin + buffer));
+			}
+		}
 
-		//if (bbox_xmax - bbox_xmin == 0 || bbox_ymax - bbox_ymin == 0) return;
+		if (bbox_xmax - bbox_xmin == 0 || bbox_ymax - bbox_ymin == 0) return;
 
-		//glyph.left = bbox_xmin;
-		//glyph.top = bbox_ymax;
-		//glyph.width = bbox_xmax - bbox_xmin;
-		//glyph.height = bbox_ymax - bbox_ymin;
+		glyph.left = bbox_xmin;
+		glyph.top = bbox_ymin;
+		glyph.width = bbox_xmax - bbox_xmin;
+		glyph.height = bbox_ymax - bbox_ymin;
 
-		//Tree tree;
-		//const float offset = 0.5;
-		//const int radius = 8;
-		//const int radius_by_256 = (256 / radius);
+		Tree tree;
+		const float offset = 0.5;
+		const int radius = 8;
+		const int radius_by_256 = (256 / radius);
 
-		//for (const Points& ring : user.rings) {
-		//	auto p1 = ring.begin();
-		//	auto p2 = p1 + 1;
+		for (const Points& ring : user.rings) {
+			auto p1 = ring.begin();
+			auto p2 = p1 + 1;
 
-		//	for (; p2 != ring.end(); p1++, p2++) {
-		//		const int segment_x1 = std::min(p1->get<0>(), p2->get<0>());
-		//		const int segment_x2 = std::max(p1->get<0>(), p2->get<0>());
-		//		const int segment_y1 = std::min(p1->get<1>(), p2->get<1>());
-		//		const int segment_y2 = std::max(p1->get<1>(), p2->get<1>());
+			for (; p2 != ring.end(); p1++, p2++) {
+				const int segment_x1 = std::min(p1->get<0>(), p2->get<0>());
+				const int segment_x2 = std::max(p1->get<0>(), p2->get<0>());
+				const int segment_y1 = std::min(p1->get<1>(), p2->get<1>());
+				const int segment_y2 = std::max(p1->get<1>(), p2->get<1>());
 
-		//		tree.insert(SegmentValue{
-		//			Box {
-		//				Point {float(segment_x1), float(segment_y1)},
-		//				Point {float(segment_x2), float(segment_y2)}
-		//			},
-		//			SegmentPair {
-		//				Point {p1->get<0>(), p1->get<1>()},
-		//				Point {p2->get<0>(), p2->get<1>()}
-		//			}
-		//			});
-		//	}
-		//}
+				tree.insert(SegmentValue{
+					Box {
+						Point {float(segment_x1), float(segment_y1)},
+						Point {float(segment_x2), float(segment_y2)}
+					},
+					SegmentPair {
+						Point {p1->get<0>(), p1->get<1>()},
+						Point {p2->get<0>(), p2->get<1>()}
+					}
+					});
+			}
+		}
 
-		//// Loop over every pixel and determine the positive/negative distance to the outline.
-		//const unsigned int buffered_width = glyph.width + 2 * buffer;
-		//const unsigned int buffered_height = glyph.height + 2 * buffer;
-		//const unsigned int bitmap_size = buffered_width * buffered_height;
-		//glyph.bitmap.resize(bitmap_size);
+		// Loop over every pixel and determine the positive/negative distance to the outline.
+		const unsigned int buffered_width = glyph.width + 2 * buffer;
+		const unsigned int buffered_height = glyph.height + 2 * buffer;
+		const unsigned int bitmap_size = buffered_width * buffered_height;
+		glyph.bitmap.resize(bitmap_size);
 
-		//for (unsigned int y = 0; y < buffered_height; y++) {
-		//	for (unsigned int x = 0; x < buffered_width; x++) {
-		//		const unsigned int ypos = buffered_height - y - 1;
-		//		const unsigned int i = ypos * buffered_width + x;
-		//		const Point pt{ x + offset, y + offset };
-		//		double d = MinDistanceToLineSegment(tree, pt, radius) * radius_by_256;
+		for (unsigned int y = 0; y < buffered_height; y++) {
+			for (unsigned int x = 0; x < buffered_width; x++) {
+				const unsigned int ypos = buffered_height - y - 1;
+				const unsigned int i = ypos * buffered_width + x;
+				const Point pt{ x + offset, y + offset };
+				double d = MinDistanceToLineSegment(tree, pt, radius) * radius_by_256;
 
-		//		// Invert if point is inside.
-		//		const bool inside = PolyContainsPoint(user.rings, pt);
-		//		if (inside) {
-		//			d = -d;
-		//		}
+				// Invert if point is inside.
+				const bool inside = PolyContainsPoint(user.rings, pt);
+				if (inside) {
+					d = -d;
+				}
 
-		//		// Shift the 0 so that we can fit a few negative values
-		//		// into our 8 bits.
-		//		d += cutoff * 256;
+				// Shift the 0 so that we can fit a few negative values
+				// into our 8 bits.
+				d += cutoff * 256;
 
-		//		// Clamp to 0-255 to prevent overflows or underflows.
-		//		int n = d > 255 ? 255 : d;
-		//		n = n < 0 ? 0 : n;
+				// Clamp to 0-255 to prevent overflows or underflows.
+				int n = static_cast<int>(d > 255 ? 255 : d);
+				n = n < 0 ? 0 : n;
 
-		//		glyph.bitmap[i] = static_cast<char>(255 - n);
-		//	}
-		//}
+				glyph.bitmap[i] = static_cast<char>(255 - n);
+			}
+		}
 	}
 
 } // ns sdf_glyph_foundry

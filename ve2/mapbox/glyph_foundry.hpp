@@ -17,7 +17,6 @@ namespace sdf_glyph_foundry
 
     struct glyph_info;
     void RenderSDF(glyph_info &glyph,
-                   int size,
                    int buffer,
                    float cutoff,
                    FT_Face ft_face);
