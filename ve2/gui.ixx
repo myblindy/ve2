@@ -107,7 +107,6 @@ export int gui_init(GLFWwindow* window, shared_ptr<Font> _font)
 			compile_shader_from_source("\
 				#version 460 \n\
 				uniform vec2 window_size; \n\
-				uniform sampler2D tex; \n\
 				\n\
 				in vec2 position; \n\
 				in vec2 uv; \n\
@@ -118,11 +117,12 @@ export int gui_init(GLFWwindow* window, shared_ptr<Font> _font)
 				void main() \n\
 				{ \n\
 					fs_uv = uv; \n\
-					fs_color = uv.s < 0 ? color : color * texture(tex, uv); \n\
+					fs_color = color; \n\
 					gl_Position = vec4(position.x / window_size.x * 2.0 - 1.0, position.y / window_size.y * 2.0 - 1.0, 0, 1); \n\
 				}", ShaderType::Vertex),
 			compile_shader_from_source("\
 				#version 460 \n\
+				uniform sampler2D tex; \n\
 				\n\
 				in vec2 fs_uv; \n\
 				in vec4 fs_color; \n\
@@ -131,7 +131,15 @@ export int gui_init(GLFWwindow* window, shared_ptr<Font> _font)
 				\n\
 				void main() \n\
 				{ \n\
-					out_color = fs_color; \n\
+					if(fs_uv.s >= 0) \n\
+					{ \n\
+						float dist = texture(tex, fs_uv).r; \n\
+						float width = fwidth(dist); \n\
+						float alpha = smoothstep(0.5 - width, 0.5 + width, dist); \n\
+						out_color = vec4(fs_color.rgb, alpha * fs_color.a * alpha); \n\
+					} \n\
+					else \n\
+						out_color = fs_color; \n\
 				}", ShaderType::Fragment)
 		});
 	glProgramUniform1i(shader_program->program_name, shader_program->uniform_locations["tex"], 0);
@@ -206,7 +214,7 @@ export int gui_label(const vec2& position, const u8string& s)
 	float x = position.x;
 	for (const auto& glyph : font->get_glyph_data(s))
 	{
-		quad({ x, position.y }, { x + glyph.advance, position.y + 32 }, glyph.uv, vec4(1, 1, 1, 1));
+		quad({ x, position.y }, { x + glyph.advance, position.y + 10 }, glyph.uv, vec4(1, 1, 1, 1));
 		x += glyph.advance;
 	}
 
