@@ -51,11 +51,14 @@ namespace priv
 
 	unique_ptr<VertexArray<Vertex>> vertex_array;
 	unique_ptr<ShaderProgram> shader_program;
+	unique_ptr<Font> font;
 	vector<Vertex> vertex_cache;									// the vertex cache that stores the gui vertices as they are being build
 	optional<uint64_t> last_vertex_cache_hash;						// the hash of the vertex cache that was previously uploaded, if any
+
 	GLFWframebuffersizefun previous_framebuffer_size_callback;
-	vec2 framebuffer_size{}, previous_framebuffer_size{};
-	shared_ptr<Font> font;
+	GLFWcursorposfun previous_cursor_pos_callback;
+
+	vec2 framebuffer_size{}, previous_framebuffer_size{}, mouse_position{};
 }
 
 using namespace priv;
@@ -98,10 +101,16 @@ void framebuffer_size_callback(GLFWwindow* window, int x, int y)
 	if (previous_framebuffer_size_callback) previous_framebuffer_size_callback(window, x, y);
 }
 
-export int gui_init(GLFWwindow* window, shared_ptr<Font> _font)
+void cursor_pos_callback(GLFWwindow* window, double x, double y)
+{
+	mouse_position = { x, y };
+	if (previous_cursor_pos_callback) previous_cursor_pos_callback(window, x, y);
+}
+
+export int gui_init(GLFWwindow* window, unique_ptr<Font> _font)
 {
 	vertex_array = VertexArray<Vertex>::create_growable();
-	font = _font;
+	font = move(_font);
 
 	shader_program = link_shader_program_from_shader_objects(
 		{
@@ -152,6 +161,9 @@ export int gui_init(GLFWwindow* window, shared_ptr<Font> _font)
 
 	// register a callback to keep the window size updated
 	previous_framebuffer_size_callback = glfwSetFramebufferSizeCallback(window, framebuffer_size_callback);
+
+	// register i/o callbacks
+	previous_cursor_pos_callback = glfwSetCursorPosCallback(window, cursor_pos_callback);
 
 	int x, y;
 	glfwGetFramebufferSize(window, &x, &y);
@@ -213,7 +225,10 @@ export int gui_slider(const vec2& position, const vec2& size, const double min, 
 
 	// the thumb
 	double percentage = (val - min) / (max - min);
-	quad(vec2((size.x - size.y) * percentage + position.x, position.y), vec2(size.y, size.y), uv_no_texture, vec4(1, 1, 1, 1));
+	const vec2 thumb_position = { (size.x - size.y) * percentage + position.x, position.y };
+	const vec2 thumb_size = { size.y, size.y };
+	quad(thumb_position, thumb_size, uv_no_texture,
+		is_vec2_inside_box2(mouse_position, box2::from_corner_size(thumb_position, thumb_size)) ? vec4(.8, .8, .8, 1) : vec4(1, 1, 1, 1));
 
 	return 0;
 }

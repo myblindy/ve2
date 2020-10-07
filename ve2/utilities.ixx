@@ -1,4 +1,4 @@
-module;
+module; 
 #include <glm/glm.hpp>
 #include <memory>
 #include <string>
@@ -62,7 +62,18 @@ namespace glm
 	export struct box2
 	{
 		vec2 v0, v1;
+
+		static box2 from_corner_size(const vec2& pos, const vec2& size)
+		{
+			return { pos, pos + size };
+		}
 	};
+
+	export bool is_vec2_inside_box2(const vec2& pos, const box2& box)
+	{
+		return pos.x >= min(box.v0.x, box.v1.x) && pos.x <= max(box.v0.x, box.v1.x)
+			&& pos.y >= min(box.v0.y, box.v1.y) && pos.y <= max(box.v0.y, box.v1.y);
+	}
 
 	export struct ibox2
 	{

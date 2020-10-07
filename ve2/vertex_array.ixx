@@ -58,7 +58,7 @@ struct VertexArray
 		return unique_ptr<VertexArray<TVertex>>(ret);
 	}
 
-	static unique_ptr<VertexArray<TVertex>> create_growable(size_t initial_size = 128)
+	static unique_ptr<VertexArray<TVertex>> create_growable(size_t initial_size = 2048)
 	{
 		auto ret = new VertexArray<TVertex>();
 		ret->can_grow = ret->can_update = true;

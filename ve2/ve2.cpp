@@ -1,4 +1,4 @@
-// ve2.cpp : Defines the entry point for the application.
+﻿// ve2.cpp : Defines the entry point for the application.
 //
 
 import shader_program;
@@ -19,7 +19,6 @@ char av_error_buffer[2048];
 GLFWwindow* window;
 int window_width, window_height;
 GLFWframebuffersizefun previous_framebuffer_size_callback;
-shared_ptr<Font> font;
 
 AVFormatContext* format_context{};
 AVFrame* input_frame;
@@ -200,8 +199,6 @@ int gl_init()
 	glewExperimental = GL_TRUE;
 	CHECK_SUCCESS(!glewInit(), "Could not initialize GLEW.");
 
-	font = make_shared<Font>("content\\OpenSans-Regular.ttf", 64);
-
 #ifdef _DEBUG
 	glEnable(GL_DEBUG_OUTPUT);
 	glEnable(GL_DEBUG_OUTPUT_SYNCHRONOUS);
@@ -265,7 +262,12 @@ int gl_init()
 	// aspect ratio transforms
 	update_aspect_ratio();
 
-	gui_init(window, font);
+	gui_init(window, make_unique<Font>(
+		vector<const char *>
+		{
+			"content\\OpenSans-Regular.ttf",
+			"content\\malgun.ttf",
+		}, 64));
 
 	// gl state init stuff
 	glClearColor(0, 0, 0, 0);
@@ -330,6 +332,8 @@ bool gl_render()
 	const auto slider_label = u8_seconds_to_time_string(frame->best_effort_timestamp * av_q2d(video_stream->time_base)) + u8" / " +
 		u8_seconds_to_time_string(video_stream->duration * av_q2d(video_stream->time_base));
 	gui_label({ window_width - 100, 3 }, slider_label, 0.2f);
+
+	gui_label({ 20, 100 }, u8"랄라 유주 짱! ▶");
 
 	// render the gui to screen
 	gui_render();
