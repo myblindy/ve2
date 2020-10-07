@@ -3,6 +3,7 @@ module;
 #include <memory>
 #include <vector>
 #include <optional>
+#include <algorithm>
 #include <glm/glm.hpp>
 #include <gl/glew.h>
 #include <glfw/glfw3.h>
@@ -133,10 +134,15 @@ export int gui_init(GLFWwindow* window, shared_ptr<Font> _font)
 				{ \n\
 					if(fs_uv.s >= 0) \n\
 					{ \n\
-						float dist = texture(tex, fs_uv).r; \n\
-						float width = fwidth(dist); \n\
-						float alpha = smoothstep(0.5 - width, 0.5 + width, dist); \n\
-						out_color = vec4(fs_color.rgb, alpha * fs_color.a * alpha); \n\
+						const vec3 outline_color = vec3(0, 0, 0); \n\
+						const float smoothing = 1.0/16.0; \n\
+						const float outlineWidth = 3.0 / 16.0; \n\
+						const float outerEdgeCenter = 0.5 - outlineWidth; \n\
+						\n\
+						float distance = texture(tex, fs_uv).r; \n\
+						float alpha = smoothstep(outerEdgeCenter - smoothing, outerEdgeCenter + smoothing, distance); \n\
+						float border = smoothstep(0.5 - smoothing, 0.5 + smoothing, distance); \n\
+						out_color = vec4(mix(outline_color.rgb, fs_color.rgb, border), alpha); \n\
 					} \n\
 					else \n\
 						out_color = fs_color; \n\
@@ -150,6 +156,9 @@ export int gui_init(GLFWwindow* window, shared_ptr<Font> _font)
 	int x, y;
 	glfwGetFramebufferSize(window, &x, &y);
 	framebuffer_size = { x, y };
+
+	// cold cache some useful characters
+	font->get_glyph_data(u8"0123456789");
 
 	return 0;
 }
@@ -209,13 +218,21 @@ export int gui_slider(const vec2& position, const vec2& size, const double min, 
 	return 0;
 }
 
-export int gui_label(const vec2& position, const u8string& s)
+export int gui_label(const vec2& position, const u8string& s, const float scale = 1.0f)
 {
 	float x = position.x;
-	for (const auto& glyph : font->get_glyph_data(s))
+	const auto glyphs = font->get_glyph_data(s);
+
+	// find the max bearing
+	auto max_bearing_y = max_element(glyphs.begin(), glyphs.end(), [](auto& x, auto& y) {return x.bearing_y < y.bearing_y; })->bearing_y;
+
+	// add a quad for each character, aligned on the baseline based on the bearing
+	for (const auto& glyph : glyphs)
 	{
-		quad({ x, position.y }, { x + glyph.advance, position.y + 10 }, glyph.uv, vec4(1, 1, 1, 1));
-		x += glyph.advance;
+		const float adv = glyph.advance;
+		quad({ x + glyph.left * scale, position.y + static_cast<float>(max_bearing_y - glyph.bearing_y) * scale },
+			{ glyph.width * scale, glyph.height * scale }, glyph.uv, vec4(1, 1, 1, 1));
+		x += adv * scale;
 	}
 
 	return 0;

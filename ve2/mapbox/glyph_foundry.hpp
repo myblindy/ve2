@@ -49,6 +49,7 @@ namespace sdf_glyph_foundry
        // Ascender and descender from baseline returned by FreeType
        double ascender;
        double descender;
+       double bearing_y;
     };
 
 } // ns sdf_glyph_foundry

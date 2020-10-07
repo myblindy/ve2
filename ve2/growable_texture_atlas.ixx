@@ -27,7 +27,7 @@ constexpr GLenum format_for_growable_texture_atlas_internal_storage_type[] =
 
 constexpr GLenum pixel_type_for_growable_texture_atlas_internal_storage_type[] =
 {
-	GL_BYTE,
+	GL_UNSIGNED_BYTE,
 };
 
 export enum class GrowableTextureAtlasFilter
@@ -80,8 +80,13 @@ export struct GrowableTextureAtlas
 		}
 
 		// upload the data to texture memory at the correct position
-		glTextureSubImage2D(texture_name, 0, current_position.x, current_position.y, size.x, size.y, texture_storage_format,
-			texture_storage_pixel_type, data);
+		if (data)
+		{
+			glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+			glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
+			glTextureSubImage2D(texture_name, 0, current_position.x, current_position.y, size.x, size.y,
+				texture_storage_format, texture_storage_pixel_type, data);
+		}
 
 		nodes.emplace_back(
 			vec2((float)current_position.x / texture_size.x, (float)current_position.y / texture_size.y),
@@ -89,7 +94,6 @@ export struct GrowableTextureAtlas
 
 		// advance
 		current_position.x += size.x;
-		current_position.y += size.y;
 		if (current_max_height < size.y) current_max_height = size.y;
 
 		return nodes.size() - 1;

@@ -4,6 +4,9 @@
 #include "sdf_font.h"
 #include "mapbox/glyph_foundry_impl.hpp"
 
+#define STB_IMAGE_WRITE_IMPLEMENTATION
+#include "stb_image_write.h"
+
 using namespace std;
 using namespace glm;
 
@@ -49,6 +52,11 @@ vector<FontGlyph> Font::get_glyph_data(const u8string& s)
 			{
 				atlas_index,
 				glyph.advance,
+				static_cast<int>(glyph.width + buffer_frame * 2),
+				static_cast<int>(glyph.height + buffer_frame * 2),
+				static_cast<int>(glyph.left),
+				static_cast<int>(-glyph.top),
+				glyph.bearing_y,
 				{ atlas->get_uv(atlas_index, 0), atlas->get_uv(atlas_index, 1) }
 			};
 

@@ -15,6 +15,8 @@ struct FontGlyph
 {
 	int atlas_index;
 	double advance;
+	int width, height, left, top;
+	double bearing_y;
 	glm::box2 uv;
 };
 

@@ -234,6 +234,7 @@ namespace sdf_glyph_foundry
 		glyph.advance = advance;
 		glyph.ascender = ascender;
 		glyph.descender = descender;
+		glyph.bearing_y = ft_face->glyph->metrics.horiBearingY / 64;
 
 		FT_Outline_Funcs func_interface = {
 			.move_to = &MoveTo,
@@ -271,14 +272,14 @@ namespace sdf_glyph_foundry
 		double bbox_xmax = -std::numeric_limits<double>::infinity(),
 			bbox_ymax = -std::numeric_limits<double>::infinity();
 
-		for (const Points& ring : user.rings) {
-			for (const Point& point : ring) {
+		for (const Points& ring : user.rings)
+			for (const Point& point : ring)
+			{
 				if (point.get<0>() > bbox_xmax) bbox_xmax = point.get<0>();
 				if (point.get<0>() < bbox_xmin) bbox_xmin = point.get<0>();
 				if (point.get<1>() > bbox_ymax) bbox_ymax = point.get<1>();
 				if (point.get<1>() < bbox_ymin) bbox_ymin = point.get<1>();
 			}
-		}
 
 		bbox_xmin = std::round(bbox_xmin);
 		bbox_ymin = std::round(bbox_ymin);
@@ -286,12 +287,12 @@ namespace sdf_glyph_foundry
 		bbox_ymax = std::round(bbox_ymax);
 
 		// Offset so that glyph outlines are in the bounding box.
-		for (Points& ring : user.rings) {
-			for (Point& point : ring) {
+		for (Points& ring : user.rings)
+			for (Point& point : ring)
+			{
 				point.set<0>(float(point.get<0>() + -bbox_xmin + buffer));
 				point.set<1>(float(point.get<1>() + -bbox_ymin + buffer));
 			}
-		}
 
 		if (bbox_xmax - bbox_xmin == 0 || bbox_ymax - bbox_ymin == 0) return;
 
@@ -301,9 +302,9 @@ namespace sdf_glyph_foundry
 		glyph.height = bbox_ymax - bbox_ymin;
 
 		Tree tree;
-		const float offset = 0.5;
-		const int radius = 8;
-		const int radius_by_256 = (256 / radius);
+		constexpr float offset = 0.5;
+		constexpr int radius = 8;
+		constexpr int radius_by_256 = (256 / radius);
 
 		for (const Points& ring : user.rings) {
 			auto p1 = ring.begin();
@@ -315,15 +316,16 @@ namespace sdf_glyph_foundry
 				const int segment_y1 = std::min(p1->get<1>(), p2->get<1>());
 				const int segment_y2 = std::max(p1->get<1>(), p2->get<1>());
 
-				tree.insert(SegmentValue{
-					Box {
-						Point {float(segment_x1), float(segment_y1)},
-						Point {float(segment_x2), float(segment_y2)}
-					},
-					SegmentPair {
-						Point {p1->get<0>(), p1->get<1>()},
-						Point {p2->get<0>(), p2->get<1>()}
-					}
+				tree.insert(SegmentValue
+					{
+						Box {
+							Point {float(segment_x1), float(segment_y1)},
+							Point {float(segment_x2), float(segment_y2)}
+						},
+						SegmentPair {
+							Point {p1->get<0>(), p1->get<1>()},
+							Point {p2->get<0>(), p2->get<1>()}
+						}
 					});
 			}
 		}
