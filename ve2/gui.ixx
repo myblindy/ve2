@@ -210,28 +210,29 @@ export int gui_render()
 }
 
 box2 uv_no_texture{ -1, -1 };
-void quad(const vec2& position, const vec2& size, const box2& uv, const vec4& color)
+void quad(const box2& box, const box2& uv, const vec4& color)
 {
-	vertex_cache.emplace_back(vec2(position.x, position.y), uv.v0, color);
-	vertex_cache.emplace_back(vec2(position.x + size.x, position.y + size.y), uv.v1, color);
-	vertex_cache.emplace_back(vec2(position.x + size.x, position.y), vec2(uv.v1.x, uv.v0.y), color);
+	vertex_cache.emplace_back(vec2(box.v0.x, box.v0.y), uv.v0, color);
+	vertex_cache.emplace_back(vec2(box.v1.x, box.v1.y), uv.v1, color);
+	vertex_cache.emplace_back(vec2(box.v1.x, box.v0.y), vec2(uv.v1.x, uv.v0.y), color);
 
-	vertex_cache.emplace_back(vec2(position.x, position.y + size.y), vec2(uv.v0.x, uv.v1.y), color);
-	vertex_cache.emplace_back(vec2(position.x + size.x, position.y + size.y), uv.v1, color);
-	vertex_cache.emplace_back(vec2(position.x, position.y), uv.v0, color);
+	vertex_cache.emplace_back(vec2(box.v0.x, box.v1.y), vec2(uv.v0.x, uv.v1.y), color);
+	vertex_cache.emplace_back(vec2(box.v1.x, box.v1.y), uv.v1, color);
+	vertex_cache.emplace_back(vec2(box.v0.x, box.v0.y), uv.v0, color);
 }
 
-export int gui_slider(const vec2& position, const vec2& size, const double min, const double max, const double val)
+export int gui_slider(const box2& box, const double min, const double max, const double val)
 {
 	// the outer rectangle
-	quad(position, size, uv_no_texture, vec4(0, 1, 0, 1));
+	quad(box, uv_no_texture, vec4(0, 1, 0, 1));
 
 	// the thumb
 	double percentage = (val - min) / (max - min);
-	const vec2 thumb_position = { (size.x - size.y) * percentage + position.x, position.y };
-	const vec2 thumb_size = { size.y, size.y };
-	quad(thumb_position, thumb_size, uv_no_texture,
-		is_vec2_inside_box2(mouse_position, box2::from_corner_size(thumb_position, thumb_size)) ? vec4(.8, .8, .8, 1) : vec4(1, 1, 1, 1));
+	const vec2 box_size = box.size();
+	const vec2 thumb_position = { (box_size.x - box_size.y) * percentage + box.v0.x, box.v0.y };
+	const vec2 thumb_size = { box_size.y, box_size.y };
+	const box2 thumb_box = box2::from_corner_size(thumb_position, thumb_size);
+	quad(thumb_box, uv_no_texture, is_vec2_inside_box2(mouse_position, thumb_box) ? vec4(.8, .8, .8, 1) : vec4(1, 1, 1, 1));
 
 	return 0;
 }
@@ -248,8 +249,8 @@ export int gui_label(const vec2& position, const u8string& s, const float scale 
 	for (const auto& glyph : glyphs)
 	{
 		const float adv = static_cast<float>(glyph.advance);
-		quad({ x + glyph.left * scale, position.y + static_cast<float>(max_bearing_y - glyph.bearing_y) * scale },
-			{ glyph.width * scale, glyph.height * scale }, glyph.uv, vec4(1, 1, 1, 1));
+		quad(box2::from_corner_size({ x + glyph.left * scale, position.y + static_cast<float>(max_bearing_y - glyph.bearing_y) * scale },
+			{ glyph.width * scale, glyph.height * scale }), glyph.uv, vec4(1, 1, 1, 1));
 		x += adv * scale;
 	}
 

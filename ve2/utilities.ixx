@@ -1,4 +1,4 @@
-module; 
+module;
 #include <glm/glm.hpp>
 #include <memory>
 #include <string>
@@ -67,6 +67,9 @@ namespace glm
 		{
 			return { pos, pos + size };
 		}
+
+		vec2& position() { return v0; }
+		vec2 size() const { return v1 - v0; }
 	};
 
 	export bool is_vec2_inside_box2(const vec2& pos, const box2& box)
