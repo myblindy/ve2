@@ -149,9 +149,12 @@ export int gui_init(GLFWwindow* window, unique_ptr<Font> _font)
 						const float outerEdgeCenter = 0.5 - outlineWidth; \n\
 						\n\
 						float distance = texture(tex, fs_uv).r; \n\
-						float alpha = smoothstep(outerEdgeCenter - smoothing, outerEdgeCenter + smoothing, distance); \n\
-						float border = smoothstep(0.5 - smoothing, 0.5 + smoothing, distance); \n\
-						out_color = vec4(mix(outline_color.rgb, fs_color.rgb, border), alpha); \n\
+						//float alpha = smoothstep(outerEdgeCenter - smoothing, outerEdgeCenter + smoothing, distance); \n\
+						//float border = smoothstep(0.5 - smoothing, 0.5 + smoothing, distance); \n\
+						//out_color = vec4(mix(outline_color.rgb, fs_color.rgb, border), alpha); \n\
+						float width = fwidth(distance); \n\
+						float alpha = smoothstep(0.5-width, 0.5+width, distance); \n\
+						out_color = vec4(fs_color.rgb, alpha); \n\
 					} \n\
 					else \n\
 						out_color = fs_color; \n\
@@ -198,7 +201,7 @@ export int gui_render()
 		glActiveTexture(GL_TEXTURE0);
 		font->bind();
 		glBindVertexArray(vertex_array->vertex_array_object_name);
-		glDrawArrays(GL_TRIANGLES, 0, vertex_array->size());
+		glDrawArrays(GL_TRIANGLES, 0, static_cast<GLsizei>(vertex_array->size()));
 	}
 
 	vertex_cache.clear();
@@ -244,7 +247,7 @@ export int gui_label(const vec2& position, const u8string& s, const float scale 
 	// add a quad for each character, aligned on the baseline based on the bearing
 	for (const auto& glyph : glyphs)
 	{
-		const float adv = glyph.advance;
+		const float adv = static_cast<float>(glyph.advance);
 		quad({ x + glyph.left * scale, position.y + static_cast<float>(max_bearing_y - glyph.bearing_y) * scale },
 			{ glyph.width * scale, glyph.height * scale }, glyph.uv, vec4(1, 1, 1, 1));
 		x += adv * scale;

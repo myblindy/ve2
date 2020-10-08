@@ -262,12 +262,11 @@ int gl_init()
 	// aspect ratio transforms
 	update_aspect_ratio();
 
-	gui_init(window, make_unique<Font>(
-		vector<const char *>
-		{
-			"content\\OpenSans-Regular.ttf",
-			"content\\malgun.ttf",
-		}, 64));
+	gui_init(window, make_unique<Font>(vector<const char*>
+	{
+		"content\\OpenSans-Regular.ttf",
+		"content\\malgun.ttf",
+	}, 64));
 
 	// gl state init stuff
 	glClearColor(0, 0, 0, 0);
@@ -327,7 +326,7 @@ bool gl_render()
 
 
 	// render the position slider and its label
-	gui_slider(vec2{}, { window_width - 100, 15.0 }, 0.0f, video_stream->duration, frame->best_effort_timestamp);
+	gui_slider(vec2{}, { window_width - 100, 15.0 }, 0.0f, static_cast<double>(video_stream->duration), static_cast<double>(frame->best_effort_timestamp));
 
 	const auto slider_label = u8_seconds_to_time_string(frame->best_effort_timestamp * av_q2d(video_stream->time_base)) + u8" / " +
 		u8_seconds_to_time_string(video_stream->duration * av_q2d(video_stream->time_base));

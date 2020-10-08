@@ -24,7 +24,7 @@ struct VertexArray
 		buffer_size = N;
 		if (buffer_capacity < buffer_size) throw exception();
 
-		memcpy(data, vertices, sizeof(TVertex) * buffer_size);
+		(TVertex[N])data = vertices;
 	}
 
 	template<typename iterator>
