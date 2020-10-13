@@ -11,6 +11,9 @@ module;
 
 export module gui;
 
+#define STB_IMAGE_IMPLEMENTATION
+#include "stb_image.h"
+
 import shader_program;
 import vertex_array;
 import utilities;
@@ -18,7 +21,7 @@ import utilities;
 using namespace std;
 using namespace glm;
 
-namespace priv
+namespace gui_priv
 {
 #pragma pack(push, 1)
 	struct Vertex
@@ -57,11 +60,16 @@ namespace priv
 
 	GLFWframebuffersizefun previous_framebuffer_size_callback;
 	GLFWcursorposfun previous_cursor_pos_callback;
+	GLFWmousebuttonfun previous_mouse_button_callback;
+
+	GLFWwindow* window;
+	GLFWcursor* cursor_move, * cursor_h, * cursor_v, * cursor_nesw, * cursor_nwse, * next_cursor{};
 
 	vec2 framebuffer_size{}, previous_framebuffer_size{}, mouse_position{};
+	bool left_mouse;
 }
 
-using namespace priv;
+using namespace gui_priv;
 
 // hashing functions
 namespace std
@@ -107,8 +115,26 @@ void cursor_pos_callback(GLFWwindow* window, double x, double y)
 	if (previous_cursor_pos_callback) previous_cursor_pos_callback(window, x, y);
 }
 
+void mouse_button_callback(GLFWwindow* window, int button, int action, int mods)
+{
+	if (button == GLFW_MOUSE_BUTTON_LEFT)
+		left_mouse = action == GLFW_PRESS;
+	if (previous_mouse_button_callback) previous_mouse_button_callback(window, button, action, mods);
+}
+
+GLFWcursor* load_cursor(const char* path, const vec2& hotspot)
+{
+	GLFWimage image{};
+	int b;
+	image.pixels = stbi_load((string("content\\") + path).c_str(), &image.width, &image.height, &b, 4);
+
+	return glfwCreateCursor(&image, hotspot.x * image.width, hotspot.y * image.height);
+}
+
 export int gui_init(GLFWwindow* window, unique_ptr<Font> _font)
 {
+	gui_priv::window = window;
+
 	vertex_array = VertexArray<Vertex>::create_growable();
 	font = move(_font);
 
@@ -167,10 +193,16 @@ export int gui_init(GLFWwindow* window, unique_ptr<Font> _font)
 
 	// register i/o callbacks
 	previous_cursor_pos_callback = glfwSetCursorPosCallback(window, cursor_pos_callback);
+	previous_mouse_button_callback = glfwSetMouseButtonCallback(window, mouse_button_callback);
 
 	int x, y;
 	glfwGetFramebufferSize(window, &x, &y);
 	framebuffer_size = { x, y };
+
+	// load cursors
+	cursor_move = load_cursor("cursor_move.png", { .5f, .5f });
+	cursor_v = load_cursor("cursor_resizenorthsouth.png", { .5f, .5f });
+	cursor_h = load_cursor("cursor_resizeeastwest.png", { .5f, .5f });
 
 	// cold cache some useful characters
 	font->get_glyph_data(u8"0123456789");
@@ -205,6 +237,9 @@ export int gui_render()
 	}
 
 	vertex_cache.clear();
+
+	glfwSetCursor(window, next_cursor);
+	next_cursor = nullptr;
 
 	return 0;
 }
@@ -253,6 +288,29 @@ export int gui_label(const vec2& position, const u8string& s, const float scale 
 			{ glyph.width * scale, glyph.height * scale }), glyph.uv, vec4(1, 1, 1, 1));
 		x += adv * scale;
 	}
+
+	return 0;
+}
+
+export int gui_selection_box(const box2& normalized_box, const box2& full_pixel_box, const vec4& color)
+{
+	const vec2 full_pixel_box_size = full_pixel_box.size();
+	const box2 pixel_box = { normalized_box.v0 * full_pixel_box_size + full_pixel_box.v0, normalized_box.v1 * full_pixel_box_size + full_pixel_box.v0 };
+	const vec2 pixel_box_size = pixel_box.size();
+	constexpr int border = 4;
+
+#define PROCESS_SIDE(_box, glfw_cursor) {\
+	const box2 box = _box;\
+	quad(box, uv_no_texture, color);\
+	if (is_vec2_inside_box2(mouse_position, box))\
+		next_cursor = glfw_cursor;\
+}
+	PROCESS_SIDE(box2::from_corner_size(pixel_box.topLeft(), { pixel_box_size.x, border }), cursor_v);
+	PROCESS_SIDE(box2::from_corner_size(pixel_box.bottomLeft() - vec2{ 0, border }, { pixel_box_size.x, border }), cursor_v);
+	PROCESS_SIDE(box2::from_corner_size(pixel_box.topLeft(), { border, pixel_box_size.y }), cursor_h);
+	PROCESS_SIDE(box2::from_corner_size(pixel_box.topRight() - vec2{ border, 0 }, { border, pixel_box_size.y }), cursor_h);
+
+#undef PROCESS_SIDE
 
 	return 0;
 }

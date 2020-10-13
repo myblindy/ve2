@@ -32,6 +32,9 @@ queue<AVFrame*> frames_queue;
 mutex frames_queue_mutex;
 condition_variable frames_queue_cv;
 
+box2 video_pixel_box{};
+box2 active_selection_box{ {0, 0}, {1, 1} };
+
 int av_get_next_frame(function<void(AVFrame*)> process_frame)
 {
 	while (av_read_frame(format_context, input_packet) >= 0)
@@ -163,9 +166,15 @@ GLuint yuv_planar_texture_names[yuv_planar_textures_count];
 
 void update_aspect_ratio()
 {
-	float ar_window = (float)window_width / window_height, ar_video = (float)video_stream->codecpar->width / video_stream->codecpar->height;
-	glProgramUniformMatrix4fv(shader_program->program_name, shader_program->uniform_locations["transform_matrix"], 1, false, value_ptr(scale(
-		ar_window < ar_video ? vec3(1, ar_window / ar_video, 1) : vec3(ar_video / ar_window, 1, 1))));
+	const float ar_window = (float)window_width / window_height, ar_video = (float)video_stream->codecpar->width / video_stream->codecpar->height;
+	const auto aspect_correction = scale(ar_window < ar_video ? vec3(1, ar_window / ar_video, 1) : vec3(ar_video / ar_window, 1, 1));
+	glProgramUniformMatrix4fv(shader_program->program_name, shader_program->uniform_locations["transform_matrix"], 1, false, value_ptr(aspect_correction));
+
+	const vec2 window_size{ window_width, window_height };
+	video_pixel_box = box2{
+		((vec4(-1, -1, 0, 1) * aspect_correction).xy() / 2.0f + .5f) * window_size,
+		((vec4(1, 1, 0, 1) * aspect_correction).xy() / 2.0f + .5f) * window_size
+	};
 }
 
 void framebuffer_size_callback(GLFWwindow* window, int width, int height)
@@ -324,7 +333,6 @@ bool gl_render()
 	glActiveTexture(GL_TEXTURE2); glBindTexture(GL_TEXTURE_2D, yuv_planar_texture_names[2]);
 	glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
 
-
 	// render the position slider and its label
 	gui_slider(box2::from_corner_size({}, { window_width - 100, 15.0 }), 0.0f,
 		static_cast<double>(video_stream->duration), static_cast<double>(frame->best_effort_timestamp));
@@ -333,7 +341,8 @@ bool gl_render()
 		u8_seconds_to_time_string(video_stream->duration * av_q2d(video_stream->time_base));
 	gui_label({ window_width - 100, 3 }, slider_label, 0.2f);
 
-	gui_label({ 20, 100 }, u8"랄라 유주 짱! ▶");
+	// render the selection box
+	gui_selection_box(active_selection_box, video_pixel_box, { 1, 1, 1, 1 });
 
 	// render the gui to screen
 	gui_render();

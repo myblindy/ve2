@@ -68,8 +68,12 @@ namespace glm
 			return { pos, pos + size };
 		}
 
-		vec2& position() { return v0; }
 		vec2 size() const { return v1 - v0; }
+		vec2 topLeft() const { return v0; }
+		vec2 topRight() const { return { v1.x, v0.y }; }
+		vec2 bottomLeft() const { return { v0.x, v1.y }; }
+		vec2 bottomRight() const { return v1; }
+
 	};
 
 	export bool is_vec2_inside_box2(const vec2& pos, const box2& box)
