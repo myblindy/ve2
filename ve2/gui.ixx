@@ -4,6 +4,7 @@ module;
 #include <vector>
 #include <optional>
 #include <algorithm>
+#include <variant>
 #include <glm/glm.hpp>
 #include <gl/glew.h>
 #include <glfw/glfw3.h>
@@ -67,6 +68,9 @@ namespace gui_priv
 
 	vec2 framebuffer_size{}, previous_framebuffer_size{}, mouse_position{};
 	bool left_mouse;
+
+	const vec4 color_button_face{ .8f, .8f, .8f, 1.f };
+	const vec4 color_button_face_highlight{ 1.f, 1.f, 1.f, 1.f };
 }
 
 using namespace gui_priv;
@@ -244,6 +248,30 @@ export int gui_render()
 	return 0;
 }
 
+enum class SelectionBoxStateSide { Up, Down, Left, Right };
+export struct SelectionBoxState
+{
+	SelectionBoxStateSide side;
+};
+
+struct
+{
+	optional<variant<SelectionBoxState*>> selected_object;
+} gui_state;
+
+template<typename TState>
+bool gui_select(TState& state)
+{
+	if (!gui_state.selected_object)
+	{
+		gui_state.selected_object = &state;
+		return true;
+	}
+	else if (*get_if<TState*>(&*gui_state.selected_object) == &state)
+		return true;
+	return false;
+}
+
 box2 uv_no_texture{ -1, -1 };
 void quad(const box2& box, const box2& uv, const vec4& color)
 {
@@ -267,7 +295,7 @@ export int gui_slider(const box2& box, const double min, const double max, const
 	const vec2 thumb_position = { (box_size.x - box_size.y) * percentage + box.v0.x, box.v0.y };
 	const vec2 thumb_size = { box_size.y, box_size.y };
 	const box2 thumb_box = box2::from_corner_size(thumb_position, thumb_size);
-	quad(thumb_box, uv_no_texture, is_vec2_inside_box2(mouse_position, thumb_box) ? vec4(.8, .8, .8, 1) : vec4(1, 1, 1, 1));
+	quad(thumb_box, uv_no_texture, is_vec2_inside_box2(mouse_position, thumb_box) ? color_button_face_highlight : color_button_face);
 
 	return 0;
 }
@@ -292,23 +320,34 @@ export int gui_label(const vec2& position, const u8string& s, const float scale 
 	return 0;
 }
 
-export int gui_selection_box(const box2& normalized_box, const box2& full_pixel_box, const vec4& color)
+export int gui_selection_box(const box2& normalized_box, const box2& full_pixel_box, SelectionBoxState& state)
 {
 	const vec2 full_pixel_box_size = full_pixel_box.size();
 	const box2 pixel_box = { normalized_box.v0 * full_pixel_box_size + full_pixel_box.v0, normalized_box.v1 * full_pixel_box_size + full_pixel_box.v0 };
 	const vec2 pixel_box_size = pixel_box.size();
 	constexpr int border = 4;
 
-#define PROCESS_SIDE(_box, glfw_cursor) {\
+#define PROCESS_SIDE(_box, _side)\
+{\
 	const box2 box = _box;\
-	quad(box, uv_no_texture, color);\
+	const vec4 *color;\
 	if (is_vec2_inside_box2(mouse_position, box))\
-		next_cursor = glfw_cursor;\
+	{\
+		next_cursor = SelectionBoxStateSide::_side == SelectionBoxStateSide::Up || SelectionBoxStateSide::_side == SelectionBoxStateSide::Down ? cursor_v : cursor_h;\
+		color = &color_button_face_highlight;\
+		\
+		if(left_mouse && gui_select(state))\
+			get<SelectionBoxState *>(*gui_state.selected_object)->side = SelectionBoxStateSide::_side;\
+	}\
+	else\
+		color = &color_button_face;\
+	quad(box, uv_no_texture, *color);\
 }
-	PROCESS_SIDE(box2::from_corner_size(pixel_box.topLeft(), { pixel_box_size.x, border }), cursor_v);
-	PROCESS_SIDE(box2::from_corner_size(pixel_box.bottomLeft() - vec2{ 0, border }, { pixel_box_size.x, border }), cursor_v);
-	PROCESS_SIDE(box2::from_corner_size(pixel_box.topLeft(), { border, pixel_box_size.y }), cursor_h);
-	PROCESS_SIDE(box2::from_corner_size(pixel_box.topRight() - vec2{ border, 0 }, { border, pixel_box_size.y }), cursor_h);
+
+	PROCESS_SIDE(box2::from_corner_size(pixel_box.topLeft(), { pixel_box_size.x, border }), Up);
+	PROCESS_SIDE(box2::from_corner_size(pixel_box.bottomLeft() - vec2{ 0, border }, { pixel_box_size.x, border }), Down);
+	PROCESS_SIDE(box2::from_corner_size(pixel_box.topLeft(), { border, pixel_box_size.y }), Left);
+	PROCESS_SIDE(box2::from_corner_size(pixel_box.topRight() - vec2{ border, 0 }, { border, pixel_box_size.y }), Right);
 
 #undef PROCESS_SIDE
 

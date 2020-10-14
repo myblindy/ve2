@@ -322,7 +322,7 @@ bool gl_render()
 	frames_queue_cv.notify_all();
 
 	// frame is processed
-	next_frame_time_sec += frame_time_sec;
+	next_frame_time_sec += frame->pkt_duration * av_q2d(video_stream->time_base);
 
 	glClear(GL_COLOR_BUFFER_BIT);
 
@@ -342,7 +342,8 @@ bool gl_render()
 	gui_label({ window_width - 100, 3 }, slider_label, 0.2f);
 
 	// render the selection box
-	gui_selection_box(active_selection_box, video_pixel_box, { 1, 1, 1, 1 });
+	static SelectionBoxState selection_box_state;
+	gui_selection_box(active_selection_box, video_pixel_box, selection_box_state);
 
 	// render the gui to screen
 	gui_render();
