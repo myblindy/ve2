@@ -75,6 +75,17 @@ namespace gui_priv
 
 using namespace gui_priv;
 
+enum class SelectionBoxStateSide { Up, Down, Left, Right, All };
+export struct SelectionBoxState
+{
+	SelectionBoxStateSide side;
+};
+
+struct
+{
+	optional<variant<SelectionBoxState*>> selected_object;
+} gui_state;
+
 // hashing functions
 namespace std
 {
@@ -116,6 +127,17 @@ void framebuffer_size_callback(GLFWwindow* window, int x, int y)
 void cursor_pos_callback(GLFWwindow* window, double x, double y)
 {
 	mouse_position = { x, y };
+
+	// handle gui element movement
+	if (gui_state.selected_object)
+	{
+		auto pSelectionBoxState = get_if<SelectionBoxState*>(&*gui_state.selected_object);
+		if (pSelectionBoxState)
+		{
+
+		}
+	}
+
 	if (previous_cursor_pos_callback) previous_cursor_pos_callback(window, x, y);
 }
 
@@ -248,17 +270,6 @@ export int gui_render()
 	return 0;
 }
 
-enum class SelectionBoxStateSide { Up, Down, Left, Right };
-export struct SelectionBoxState
-{
-	SelectionBoxStateSide side;
-};
-
-struct
-{
-	optional<variant<SelectionBoxState*>> selected_object;
-} gui_state;
-
 template<typename TState>
 bool gui_select(TState& state)
 {
@@ -348,6 +359,13 @@ export int gui_selection_box(const box2& normalized_box, const box2& full_pixel_
 	PROCESS_SIDE(box2::from_corner_size(pixel_box.bottomLeft() - vec2{ 0, border }, { pixel_box_size.x, border }), Down);
 	PROCESS_SIDE(box2::from_corner_size(pixel_box.topLeft(), { border, pixel_box_size.y }), Left);
 	PROCESS_SIDE(box2::from_corner_size(pixel_box.topRight() - vec2{ border, 0 }, { border, pixel_box_size.y }), Right);
+
+	if (!next_cursor && is_vec2_inside_box2(mouse_position, pixel_box))
+	{
+		next_cursor = cursor_move;
+		if (left_mouse && gui_select(state))\
+			get<SelectionBoxState*>(*gui_state.selected_object)->side = SelectionBoxStateSide::All;
+	}
 
 #undef PROCESS_SIDE
 
