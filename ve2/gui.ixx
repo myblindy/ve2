@@ -66,7 +66,7 @@ namespace gui_priv
 	GLFWwindow* window;
 	GLFWcursor* cursor_move, * cursor_h, * cursor_v, * cursor_nesw, * cursor_nwse, * next_cursor{};
 
-	vec2 framebuffer_size{}, previous_framebuffer_size{}, mouse_position{};
+	vec2 framebuffer_size{}, previous_framebuffer_size{}, mouse_position{}, left_mouse_down_position;
 	bool left_mouse;
 
 	const vec4 color_button_face{ .8f, .8f, .8f, 1.f };
@@ -79,6 +79,9 @@ enum class SelectionBoxStateSide { Up, Down, Left, Right, All };
 export struct SelectionBoxState
 {
 	SelectionBoxStateSide side;
+	vec2 last_mouse_position;
+	box2* normalized_box;
+	box2 full_pixel_box;
 };
 
 struct
@@ -131,10 +134,34 @@ void cursor_pos_callback(GLFWwindow* window, double x, double y)
 	// handle gui element movement
 	if (gui_state.selected_object)
 	{
-		auto pSelectionBoxState = get_if<SelectionBoxState*>(&*gui_state.selected_object);
-		if (pSelectionBoxState)
+		auto ppSelectionBoxState = get_if<SelectionBoxState*>(&*gui_state.selected_object);
+		if (ppSelectionBoxState)
 		{
+			auto& state = **ppSelectionBoxState;
+			const auto pixel_delta = mouse_position - state.last_mouse_position;
 
+			switch (state.side)
+			{
+#define PROCESS_SIDE(_side, _move_func, _field) \
+			case SelectionBoxStateSide::_side: \
+				state.normalized_box->_move_func(pixel_delta._field / state.full_pixel_box.size()._field); \
+				state.normalized_box->clamp(0, 0, 1, 1);\
+				break
+
+				PROCESS_SIDE(Up, moveTop, y);
+				PROCESS_SIDE(Down, moveBottom, y);
+				PROCESS_SIDE(Left, moveLeft, x);
+				PROCESS_SIDE(Right, moveRight, x);
+
+			case SelectionBoxStateSide::All:
+				state.normalized_box->move(pixel_delta / state.full_pixel_box.size());
+				state.normalized_box->clamp(0, 0, 1, 1);
+				break;
+
+#undef PROCESS_SIDE
+			}
+
+			state.last_mouse_position = mouse_position;
 		}
 	}
 
@@ -144,7 +171,15 @@ void cursor_pos_callback(GLFWwindow* window, double x, double y)
 void mouse_button_callback(GLFWwindow* window, int button, int action, int mods)
 {
 	if (button == GLFW_MOUSE_BUTTON_LEFT)
+	{
+		const auto old_left_mouse = left_mouse;
 		left_mouse = action == GLFW_PRESS;
+		if (left_mouse != old_left_mouse && left_mouse)
+			left_mouse_down_position = mouse_position;
+		else
+			gui_state.selected_object.reset();
+	}
+
 	if (previous_mouse_button_callback) previous_mouse_button_callback(window, button, action, mods);
 }
 
@@ -331,43 +366,69 @@ export int gui_label(const vec2& position, const u8string& s, const float scale 
 	return 0;
 }
 
-export int gui_selection_box(const box2& normalized_box, const box2& full_pixel_box, SelectionBoxState& state)
+export int gui_selection_box(box2& normalized_box, const box2& full_pixel_box, SelectionBoxState& state)
 {
 	const vec2 full_pixel_box_size = full_pixel_box.size();
 	const box2 pixel_box = { normalized_box.v0 * full_pixel_box_size + full_pixel_box.v0, normalized_box.v1 * full_pixel_box_size + full_pixel_box.v0 };
 	const vec2 pixel_box_size = pixel_box.size();
-	constexpr int border = 4;
+	constexpr int border = 2, touch_offset = 4, outline_width = 1;
+
+#define PROCESS_SIDE_HELPER(_side)\
+	do {\
+		if(left_mouse && !gui_state.selected_object && gui_select(state))\
+		{\
+			auto pSelectionBoxState = get<SelectionBoxState *>(*gui_state.selected_object);\
+			pSelectionBoxState->side = SelectionBoxStateSide::_side;\
+			pSelectionBoxState->last_mouse_position = left_mouse_down_position;\
+			pSelectionBoxState->normalized_box = &normalized_box;\
+			pSelectionBoxState->full_pixel_box = full_pixel_box;\
+		}\
+	} while(0) 
 
 #define PROCESS_SIDE(_box, _side)\
-{\
+do {\
 	const box2 box = _box;\
 	const vec4 *color;\
-	if (is_vec2_inside_box2(mouse_position, box))\
+	if (is_vec2_inside_box2(mouse_position, box.with_offset(touch_offset)))\
 	{\
 		next_cursor = SelectionBoxStateSide::_side == SelectionBoxStateSide::Up || SelectionBoxStateSide::_side == SelectionBoxStateSide::Down ? cursor_v : cursor_h;\
 		color = &color_button_face_highlight;\
 		\
-		if(left_mouse && gui_select(state))\
-			get<SelectionBoxState *>(*gui_state.selected_object)->side = SelectionBoxStateSide::_side;\
+		PROCESS_SIDE_HELPER(_side);\
 	}\
 	else\
 		color = &color_button_face;\
 	quad(box, uv_no_texture, *color);\
+} while(0)
+
+#define PROCESS_SIDES \
+{\
+	for(const auto &box: boxes) quad(box.with_offset(outline_width), uv_no_texture, vec4(0, 0, 0, 1));\
+	PROCESS_SIDE(boxes[0], Up);\
+	PROCESS_SIDE(boxes[1], Down);\
+	PROCESS_SIDE(boxes[2], Left);\
+	PROCESS_SIDE(boxes[3], Right);\
 }
 
-	PROCESS_SIDE(box2::from_corner_size(pixel_box.topLeft(), { pixel_box_size.x, border }), Up);
-	PROCESS_SIDE(box2::from_corner_size(pixel_box.bottomLeft() - vec2{ 0, border }, { pixel_box_size.x, border }), Down);
-	PROCESS_SIDE(box2::from_corner_size(pixel_box.topLeft(), { border, pixel_box_size.y }), Left);
-	PROCESS_SIDE(box2::from_corner_size(pixel_box.topRight() - vec2{ border, 0 }, { border, pixel_box_size.y }), Right);
+	box2 boxes[] =
+	{
+		box2::from_corner_size(pixel_box.topLeft(), { pixel_box_size.x, border }),
+		box2::from_corner_size(pixel_box.bottomLeft() - vec2{ 0, border }, { pixel_box_size.x, border }),
+		box2::from_corner_size(pixel_box.topLeft(), { border, pixel_box_size.y }),
+		box2::from_corner_size(pixel_box.topRight() - vec2{ border, 0 }, { border, pixel_box_size.y })
+	};
+
+	PROCESS_SIDES;
 
 	if (!next_cursor && is_vec2_inside_box2(mouse_position, pixel_box))
 	{
 		next_cursor = cursor_move;
-		if (left_mouse && gui_select(state))\
-			get<SelectionBoxState*>(*gui_state.selected_object)->side = SelectionBoxStateSide::All;
+		PROCESS_SIDE_HELPER(All);
 	}
 
+#undef PROCESS_SIDES
 #undef PROCESS_SIDE
+#undef PROCESS_SIDE_HELPER
 
 	return 0;
 }

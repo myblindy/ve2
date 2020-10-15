@@ -63,17 +63,35 @@ namespace glm
 	{
 		vec2 v0, v1;
 
-		static box2 from_corner_size(const vec2& pos, const vec2& size)
-		{
-			return { pos, pos + size };
-		}
+		static box2 from_corner_size(const vec2& pos, const vec2& size) { return { pos, pos + size }; }
 
 		vec2 size() const { return v1 - v0; }
+
 		vec2 topLeft() const { return v0; }
 		vec2 topRight() const { return { v1.x, v0.y }; }
 		vec2 bottomLeft() const { return { v0.x, v1.y }; }
 		vec2 bottomRight() const { return v1; }
 
+		void moveTop(const float deltaY) { v0.y += deltaY; }
+		void moveBottom(const float deltaY) { v1.y += deltaY; }
+		void moveLeft(const float deltaX) { v0.x += deltaX; }
+		void moveRight(const float deltaX) { v1.x += deltaX; }
+		void move(const vec2& delta) { v0 += delta; v1 += delta; }
+
+		void clamp(float x0, float y0, float x1, float y1)
+		{
+			if (v0.x < x0) v0.x = x0;
+			if (v0.y < y0) v0.y = y0;
+			if (v1.x < x0) v1.x = x0;
+			if (v1.y < y0) v1.y = y0;
+
+			if (v0.x > x1) v0.x = x1;
+			if (v0.y > y1) v0.y = y1;
+			if (v1.x > x1) v1.x = x1;
+			if (v1.y > y1) v1.y = y1;
+		}
+
+		box2 with_offset(const float offset) const { return { v0 - offset, v1 + offset }; }
 	};
 
 	export bool is_vec2_inside_box2(const vec2& pos, const box2& box)
