@@ -13,7 +13,7 @@ import utilities;
 
 struct FontGlyph
 {
-	int atlas_index;
+	size_t atlas_index;
 	double advance;
 	int width, height, left, top;
 	double bearing_y;
@@ -24,7 +24,7 @@ struct Font
 {
 	Font(const std::vector<const char*> &font_face_paths, int render_size = 512, int sdf_size = 32);
 	std::vector<FontGlyph> get_glyph_data(const std::u8string& s);
-	void bind() { glBindTexture(GL_TEXTURE_2D, atlas->texture_name); }
+	void bind() const { glBindTexture(GL_TEXTURE_2D, atlas->texture_name); }
 
 private:
 	int sdf_size;

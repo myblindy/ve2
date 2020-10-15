@@ -48,7 +48,7 @@ export u8string u8_seconds_to_time_string(const double total_sec, const bool sho
 
 	if (show_decimals)
 	{
-		auto decs = (total_sec - floor(total_sec)) * 1000;
+		auto decs = static_cast<int>((total_sec - floor(total_sec)) * 1000);
 		auto decs_string = decs < 10 ? u8"000" + u8_to_string(decs) : decs < 100 ? u8"00" + u8_to_string(decs) : decs < 1000 ? u8"0" + u8_to_string(decs) : u8_to_string(decs);
 		res += u8".";
 		res += decs_string;
@@ -61,7 +61,7 @@ namespace glm
 {
 	export struct box2
 	{
-		vec2 v0, v1;
+		vec2 v0{}, v1{};
 
 		static box2 from_corner_size(const vec2& pos, const vec2& size) { return { pos, pos + size }; }
 

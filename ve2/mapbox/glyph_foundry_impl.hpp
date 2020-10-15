@@ -58,14 +58,14 @@ namespace sdf_glyph_foundry
 			user->rings.push_back(user->ring);
 			user->ring.clear();
 		}
-		user->ring.emplace_back(float(to->x) / 64.0f, float(to->y) / 64.0f);
+		user->ring.emplace_back(float(to->x / 64.0), float(to->y / 64.0));
 		return 0;
 	}
 
 	int LineTo(const FT_Vector* to, void* ptr)
 	{
 		User* user = static_cast<User*>(ptr);
-		user->ring.emplace_back(float(to->x) / 64.0, float(to->y) / 64.0);
+		user->ring.emplace_back(float(to->x / 64.0), float(to->y / 64.0));
 		return 0;
 	}
 
@@ -296,10 +296,10 @@ namespace sdf_glyph_foundry
 
 		if (bbox_xmax - bbox_xmin == 0 || bbox_ymax - bbox_ymin == 0) return;
 
-		glyph.left = bbox_xmin;
-		glyph.top = bbox_ymin;
-		glyph.width = bbox_xmax - bbox_xmin;
-		glyph.height = bbox_ymax - bbox_ymin;
+		glyph.left = static_cast<int>(bbox_xmin);
+		glyph.top = static_cast<int>(bbox_ymin);
+		glyph.width = static_cast<int>(bbox_xmax - bbox_xmin);
+		glyph.height = static_cast<int>(bbox_ymax - bbox_ymin);
 
 		Tree tree;
 		constexpr float offset = 0.5;
@@ -311,16 +311,16 @@ namespace sdf_glyph_foundry
 			auto p2 = p1 + 1;
 
 			for (; p2 != ring.end(); p1++, p2++) {
-				const int segment_x1 = std::min(p1->get<0>(), p2->get<0>());
-				const int segment_x2 = std::max(p1->get<0>(), p2->get<0>());
-				const int segment_y1 = std::min(p1->get<1>(), p2->get<1>());
-				const int segment_y2 = std::max(p1->get<1>(), p2->get<1>());
+				const auto segment_x1 = std::min(p1->get<0>(), p2->get<0>());
+				const auto segment_x2 = std::max(p1->get<0>(), p2->get<0>());
+				const auto segment_y1 = std::min(p1->get<1>(), p2->get<1>());
+				const auto segment_y2 = std::max(p1->get<1>(), p2->get<1>());
 
 				tree.insert(SegmentValue
 					{
 						Box {
-							Point {float(segment_x1), float(segment_y1)},
-							Point {float(segment_x2), float(segment_y2)}
+							Point {segment_x1, segment_y1},
+							Point {segment_x2, segment_y2}
 						},
 						SegmentPair {
 							Point {p1->get<0>(), p1->get<1>()},

@@ -189,7 +189,7 @@ GLFWcursor* load_cursor(const char* path, const vec2& hotspot)
 	int b;
 	image.pixels = stbi_load((string("content\\") + path).c_str(), &image.width, &image.height, &b, 4);
 
-	return glfwCreateCursor(&image, hotspot.x * image.width, hotspot.y * image.height);
+	return glfwCreateCursor(&image, static_cast<int>(hotspot.x * image.width), static_cast<int>(hotspot.y * image.height));
 }
 
 export int gui_init(GLFWwindow* window, unique_ptr<Font> _font)
@@ -346,19 +346,29 @@ export int gui_slider(const box2& box, const double min, const double max, const
 	return 0;
 }
 
-export int gui_label(const vec2& position, const u8string& s, const float scale = 1.0f)
+export int gui_label(const box2& box, const u8string& s, const float scale = 1.0f)
 {
-	float x = position.x;
+	float x = box.v0.x;
 	const auto glyphs = font->get_glyph_data(s);
 
 	// find the max bearing
 	auto max_bearing_y = max_element(glyphs.begin(), glyphs.end(), [](auto& x, auto& y) {return x.bearing_y < y.bearing_y; })->bearing_y;
 
+	// calculate the bounding box
+	box2 bbox;
+	for (const auto& glyph : glyphs)
+	{
+		bbox.v1.x += static_cast<float>(glyph.advance * scale);
+		if (bbox.v1.y < glyph.height * scale + static_cast<float>(max_bearing_y - glyph.bearing_y) * scale)
+			bbox.v1.y = glyph.height * scale + static_cast<float>(max_bearing_y - glyph.bearing_y) * scale;
+	}
+
 	// add a quad for each character, aligned on the baseline based on the bearing
+	vec2 offset = box.size() / 2.f - bbox.size() / 2.f;
 	for (const auto& glyph : glyphs)
 	{
 		const float adv = static_cast<float>(glyph.advance);
-		quad(box2::from_corner_size({ x + glyph.left * scale, position.y + static_cast<float>(max_bearing_y - glyph.bearing_y) * scale },
+		quad(box2::from_corner_size(offset + vec2{ x + glyph.left * scale, box.v0.y + static_cast<float>(max_bearing_y - glyph.bearing_y) * scale },
 			{ glyph.width * scale, glyph.height * scale }), glyph.uv, vec4(1, 1, 1, 1));
 		x += adv * scale;
 	}
@@ -401,24 +411,23 @@ do {\
 	quad(box, uv_no_texture, *color);\
 } while(0)
 
-#define PROCESS_SIDES \
-{\
+#define PROCESS_SIDES(...) \
+do{\
+	box2 boxes[] = __VA_ARGS__;\
 	for(const auto &box: boxes) quad(box.with_offset(outline_width), uv_no_texture, vec4(0, 0, 0, 1));\
 	PROCESS_SIDE(boxes[0], Up);\
 	PROCESS_SIDE(boxes[1], Down);\
 	PROCESS_SIDE(boxes[2], Left);\
 	PROCESS_SIDE(boxes[3], Right);\
-}
+} while(0)
 
-	box2 boxes[] =
-	{
-		box2::from_corner_size(pixel_box.topLeft(), { pixel_box_size.x, border }),
-		box2::from_corner_size(pixel_box.bottomLeft() - vec2{ 0, border }, { pixel_box_size.x, border }),
-		box2::from_corner_size(pixel_box.topLeft(), { border, pixel_box_size.y }),
-		box2::from_corner_size(pixel_box.topRight() - vec2{ border, 0 }, { border, pixel_box_size.y })
-	};
-
-	PROCESS_SIDES;
+	PROCESS_SIDES(
+		{
+			box2::from_corner_size(pixel_box.topLeft(), { pixel_box_size.x, border }),
+			box2::from_corner_size(pixel_box.bottomLeft() - vec2{ 0, border }, { pixel_box_size.x, border }),
+			box2::from_corner_size(pixel_box.topLeft(), { border, pixel_box_size.y }),
+			box2::from_corner_size(pixel_box.topRight() - vec2{ border, 0 }, { border, pixel_box_size.y })
+		});
 
 	if (!next_cursor && is_vec2_inside_box2(mouse_position, pixel_box))
 	{

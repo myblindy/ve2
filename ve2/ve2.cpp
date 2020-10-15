@@ -255,13 +255,15 @@ int gl_init()
 
 	// video textures (3 yuv planar textures)
 	glCreateTextures(GL_TEXTURE_2D, yuv_planar_textures_count, yuv_planar_texture_names);
-	for (int i = 0; i < yuv_planar_textures_count; ++i)
+	int yuv_planar_texture_name_index = 0;
+	for (auto yuv_planar_texture_name = yuv_planar_texture_names; yuv_planar_texture_name < yuv_planar_texture_names + yuv_planar_textures_count; ++yuv_planar_texture_name, ++yuv_planar_texture_name_index)
 	{
-		glTextureParameteri(yuv_planar_texture_names[i], GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-		glTextureParameteri(yuv_planar_texture_names[i], GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-		glTextureParameteri(yuv_planar_texture_names[i], GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-		glTextureParameteri(yuv_planar_texture_names[i], GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-		glTextureStorage2D(yuv_planar_texture_names[i], 1, GL_R8, video_stream->codecpar->width / (i ? 2 : 1), video_stream->codecpar->height / (i ? 2 : 1));
+		glTextureParameteri(*yuv_planar_texture_name, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+		glTextureParameteri(*yuv_planar_texture_name, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+		glTextureParameteri(*yuv_planar_texture_name, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+		glTextureParameteri(*yuv_planar_texture_name, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+		glTextureStorage2D(*yuv_planar_texture_name, 1, GL_R8,
+			video_stream->codecpar->width / (yuv_planar_texture_name_index ? 2 : 1), video_stream->codecpar->height / (yuv_planar_texture_name_index ? 2 : 1));
 	}
 
 	glProgramUniform1i(shader_program->program_name, shader_program->uniform_locations["y_texture"], 0);
@@ -339,10 +341,10 @@ bool gl_render()
 
 	const auto slider_label = u8_seconds_to_time_string(frame->best_effort_timestamp * av_q2d(video_stream->time_base)) + u8" / " +
 		u8_seconds_to_time_string(video_stream->duration * av_q2d(video_stream->time_base));
-	gui_label({ window_width - 100, 3 }, slider_label, 0.2f);
+	gui_label(box2::from_corner_size({ window_width - 100, 0 }, { 100, 15 }), slider_label, 0.2f);
 
 	// render the selection box
-	static SelectionBoxState selection_box_state;
+	static SelectionBoxState selection_box_state{};
 	gui_selection_box(active_selection_box, video_pixel_box, selection_box_state);
 
 	// render the gui to screen

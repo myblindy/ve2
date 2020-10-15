@@ -1,12 +1,11 @@
 module;
-
 #include <gl/glew.h>
 #include <glfw/glfw3.h>
 #include <memory>
 
-using namespace std;
-
 export module vertex_array;
+
+using namespace std;
 
 template<typename T>
 concept HasSetupGlArrayAttributeFunction = requires (T t) { T::setup_gl_array_attributes((GLuint)0); };
@@ -14,7 +13,7 @@ concept HasSetupGlArrayAttributeFunction = requires (T t) { T::setup_gl_array_at
 export template<typename TVertex> requires HasSetupGlArrayAttributeFunction<TVertex>
 struct VertexArray
 {
-	GLuint vertex_buffer_object_name, vertex_array_object_name;
+	GLuint vertex_buffer_object_name{}, vertex_array_object_name{};
 
 	template<size_t N>
 	void update(const TVertex(&vertices)[N])
@@ -30,7 +29,7 @@ struct VertexArray
 	template<typename iterator>
 	void update(const iterator begin, const iterator end)
 	{
-		throw_on_invalid_permissions(end - begin > buffer_capacity, true);
+		throw_on_invalid_permissions(static_cast<size_t>(end - begin) > buffer_capacity, true);
 
 		buffer_size = end - begin;
 		if (buffer_capacity < buffer_size) throw exception();

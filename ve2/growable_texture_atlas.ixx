@@ -64,7 +64,7 @@ export struct GrowableTextureAtlas
 		glTextureParameteri(texture_name, GL_TEXTURE_MIN_FILTER, (GLint)min_filter);
 	}
 
-	int add(const ivec2& size, const char* data)
+	size_t add(const ivec2& size, const char* data)
 	{
 		if (current_position.x + size.x > texture_size.x)
 		{
@@ -99,7 +99,8 @@ export struct GrowableTextureAtlas
 		return nodes.size() - 1;
 	}
 
-	vec2 get_uv(int index, int which) const { return which == 0 ? nodes[index].uv0 : nodes[index].uv1; }
+	template<int which>
+	vec2 get_uv(size_t index) const { return which == 0 ? nodes[index].uv0 : nodes[index].uv1; }
 
 private:
 	GLenum texture_storage_format, texture_storage_pixel_type;

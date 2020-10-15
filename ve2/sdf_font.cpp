@@ -52,7 +52,7 @@ vector<FontGlyph> Font::get_glyph_data(const u8string& s)
 				if (!(glyph.glyph_index = FT_Get_Char_Index(ft_face, c32)))
 					continue;		// missing character in this font, fall back to the next ones
 
-				const int buffer_frame = 3;
+				constexpr int buffer_frame = 3;
 				sdf_glyph_foundry::RenderSDF(glyph, buffer_frame, 0.25, ft_face);
 
 				// upload the character to the texture
@@ -66,7 +66,7 @@ vector<FontGlyph> Font::get_glyph_data(const u8string& s)
 					static_cast<int>(glyph.left),
 					static_cast<int>(-glyph.top),
 					glyph.bearing_y,
-					{ atlas->get_uv(atlas_index, 0), atlas->get_uv(atlas_index, 1) }
+					{ atlas->get_uv<0>(atlas_index), atlas->get_uv<1>(atlas_index) }
 				};
 
 				// store the datum
