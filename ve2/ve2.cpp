@@ -25,12 +25,15 @@ AVFrame* input_frame;
 AVPacket* input_packet;
 AVStream* video_stream;
 AVCodecContext* codec_decoder_context;
-double frame_time_sec, next_frame_time_sec = 0;
+int64_t last_frame_timestamp{};
+constexpr double frame_time_sec_paused{ 1.0 / 30.0 };
+double frame_time_sec, next_frame_time_sec = 0, next_frame_time_sec_remaining_paused{};
 
 constexpr int frames_queue_max_length = 10;
 queue<AVFrame*> frames_queue;
 mutex frames_queue_mutex;
 condition_variable frames_queue_cv;
+bool playing = true;
 
 box2 video_pixel_box{};
 box2 active_selection_box{ {0, 0}, {1, 1} };
@@ -273,11 +276,7 @@ int gl_init()
 	// aspect ratio transforms
 	update_aspect_ratio();
 
-	gui_init(window, make_unique<Font>(vector<const char*>
-	{
-		"content\\OpenSans-Regular.ttf",
-			"content\\malgun.ttf",
-	}, 64));
+	gui_init(window, make_unique<Font>(vector<const char*>{ "content\\OpenSans-Regular.ttf", "content\\malgun.ttf", "content\\Symbola605.ttf" }, 64));
 
 	// gl state init stuff
 	glClearColor(0, 0, 0, 0);
@@ -298,33 +297,39 @@ bool gl_render()
 	const auto current_time_sec = glfwGetTime();
 	if (current_time_sec < next_frame_time_sec) return false;
 
-	// read the next video frame
-	AVFrame* frame;
+	if (playing)
 	{
-		lock_guard<mutex> lock(frames_queue_mutex);
-		if (frames_queue.empty())
+		// read the next video frame
+		AVFrame* frame;
 		{
-			had_underflow = true;
-			return false;					// no data, buffer underflow
+			lock_guard<mutex> lock(frames_queue_mutex);
+			if (frames_queue.empty())
+			{
+				had_underflow = true;
+				return false;					// no data, buffer underflow
+			}
+
+			frame = frames_queue.front();
+			frames_queue.pop();
 		}
 
-		frame = frames_queue.front();
-		frames_queue.pop();
+		// upload the data
+		glPixelStorei(GL_UNPACK_ROW_LENGTH, frame->linesize[0]);
+		glTextureSubImage2D(yuv_planar_texture_names[0], 0, 0, 0, video_stream->codecpar->width, video_stream->codecpar->height, GL_RED, GL_UNSIGNED_BYTE, frame->data[0]);
+		glPixelStorei(GL_UNPACK_ROW_LENGTH, frame->linesize[1]);
+		glTextureSubImage2D(yuv_planar_texture_names[1], 0, 0, 0, video_stream->codecpar->width / 2, video_stream->codecpar->height / 2, GL_RED, GL_UNSIGNED_BYTE, frame->data[1]);
+		glPixelStorei(GL_UNPACK_ROW_LENGTH, frame->linesize[2]);
+		glTextureSubImage2D(yuv_planar_texture_names[2], 0, 0, 0, video_stream->codecpar->width / 2, video_stream->codecpar->height / 2, GL_RED, GL_UNSIGNED_BYTE, frame->data[2]);
+
+		// notify the decoder thread that we consumed a frame
+		frames_queue_cv.notify_all();
+
+		// frame is processed
+		last_frame_timestamp = frame->best_effort_timestamp;
+		next_frame_time_sec += frame->pkt_duration * av_q2d(video_stream->time_base);
+
+		av_frame_free(&frame);
 	}
-
-	// upload the data
-	glPixelStorei(GL_UNPACK_ROW_LENGTH, frame->linesize[0]);
-	glTextureSubImage2D(yuv_planar_texture_names[0], 0, 0, 0, video_stream->codecpar->width, video_stream->codecpar->height, GL_RED, GL_UNSIGNED_BYTE, frame->data[0]);
-	glPixelStorei(GL_UNPACK_ROW_LENGTH, frame->linesize[1]);
-	glTextureSubImage2D(yuv_planar_texture_names[1], 0, 0, 0, video_stream->codecpar->width / 2, video_stream->codecpar->height / 2, GL_RED, GL_UNSIGNED_BYTE, frame->data[1]);
-	glPixelStorei(GL_UNPACK_ROW_LENGTH, frame->linesize[2]);
-	glTextureSubImage2D(yuv_planar_texture_names[2], 0, 0, 0, video_stream->codecpar->width / 2, video_stream->codecpar->height / 2, GL_RED, GL_UNSIGNED_BYTE, frame->data[2]);
-
-	// notify the decoder thread that we consumed a frame
-	frames_queue_cv.notify_all();
-
-	// frame is processed
-	next_frame_time_sec += frame->pkt_duration * av_q2d(video_stream->time_base);
 
 	glClear(GL_COLOR_BUFFER_BIT);
 
@@ -335,13 +340,31 @@ bool gl_render()
 	glActiveTexture(GL_TEXTURE2); glBindTexture(GL_TEXTURE_2D, yuv_planar_texture_names[2]);
 	glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
 
-	// render the position slider and its label
-	gui_slider(box2::from_corner_size({}, { window_width - 100, 15.0 }), 0.0f,
-		static_cast<double>(video_stream->duration), static_cast<double>(frame->best_effort_timestamp));
+	// gui layout constants
+	constexpr float left_button_width = 30.f, slider_height = 15.f, slider_margins_x = 5.f, time_position_width = 100.f,
+		play_bar_height = left_button_width;
+	constexpr float font_scale = 0.2f;
 
-	const auto slider_label = u8_seconds_to_time_string(frame->best_effort_timestamp * av_q2d(video_stream->time_base)) + u8" / " +
+	// render the position slider and its label
+	gui_slider(
+		box2::from_corner_size({ left_button_width + slider_margins_x, play_bar_height / 2.f - slider_height / 2.f }, { window_width - time_position_width - slider_margins_x - left_button_width, slider_height }), 0.0f,
+		static_cast<double>(video_stream->duration), static_cast<double>(last_frame_timestamp));
+
+	const auto slider_label = u8_seconds_to_time_string(last_frame_timestamp * av_q2d(video_stream->time_base)) + u8" / " +
 		u8_seconds_to_time_string(video_stream->duration * av_q2d(video_stream->time_base));
-	gui_label(box2::from_corner_size({ window_width - 100, 0 }, { 100, 15 }), slider_label, 0.2f);
+	gui_label(box2::from_corner_size({ window_width - time_position_width, 0 }, { time_position_width, play_bar_height }), slider_label, font_scale);
+
+	// left buttons
+	gui_button(box2::from_corner_size({}, { left_button_width, play_bar_height }), playing ? u8"⬛" : u8"▶", [&]
+		{
+			if (playing = !playing)
+				next_frame_time_sec = next_frame_time_sec_remaining_paused + current_time_sec;
+			else
+			{
+				next_frame_time_sec_remaining_paused = next_frame_time_sec - current_time_sec;
+				next_frame_time_sec = current_time_sec + frame_time_sec_paused;
+			}
+		}, font_scale);
 
 	// render the selection box
 	static SelectionBoxState selection_box_state{};
@@ -350,7 +373,6 @@ bool gl_render()
 	// render the gui to screen
 	gui_render();
 
-	av_frame_free(&frame);
 	return true;
 }
 

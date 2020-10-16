@@ -75,7 +75,7 @@ vector<FontGlyph> Font::get_glyph_data(const u8string& s)
 		else
 			font_datum = font_data_iterator->second;
 
-		if (!font_datum) throw exception();
+		if (!font_datum) throw exception("Could not find character in any font");
 		glyphs.push_back(*font_datum);
 	}
 

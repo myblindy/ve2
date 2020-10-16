@@ -4,6 +4,7 @@ module;
 #include <vector>
 #include <optional>
 #include <algorithm>
+#include <functional>
 #include <variant>
 #include <glm/glm.hpp>
 #include <gl/glew.h>
@@ -69,8 +70,10 @@ namespace gui_priv
 	vec2 framebuffer_size{}, previous_framebuffer_size{}, mouse_position{}, left_mouse_down_position;
 	bool left_mouse;
 
+	const vec4 color_label_text{ 1.f, 1.f, 1.f, 1.f };
 	const vec4 color_button_face{ .8f, .8f, .8f, 1.f };
 	const vec4 color_button_face_highlight{ 1.f, 1.f, 1.f, 1.f };
+	const vec4 color_button_text{ 0.f, 0.f, 0.f, 1.f };
 }
 
 using namespace gui_priv;
@@ -87,6 +90,7 @@ export struct SelectionBoxState
 struct
 {
 	optional<variant<SelectionBoxState*>> selected_object;
+	bool left_mouse_handled{};
 } gui_state;
 
 // hashing functions
@@ -177,7 +181,10 @@ void mouse_button_callback(GLFWwindow* window, int button, int action, int mods)
 		if (left_mouse != old_left_mouse && left_mouse)
 			left_mouse_down_position = mouse_position;
 		else
+		{
 			gui_state.selected_object.reset();
+			gui_state.left_mouse_handled = false;
+		}
 	}
 
 	if (previous_mouse_button_callback) previous_mouse_button_callback(window, button, action, mods);
@@ -346,7 +353,7 @@ export int gui_slider(const box2& box, const double min, const double max, const
 	return 0;
 }
 
-export int gui_label(const box2& box, const u8string& s, const float scale = 1.0f)
+export int gui_label(const box2& box, const u8string& s, const float scale, const vec4& color)
 {
 	float x = box.v0.x;
 	const auto glyphs = font->get_glyph_data(s);
@@ -369,9 +376,30 @@ export int gui_label(const box2& box, const u8string& s, const float scale = 1.0
 	{
 		const float adv = static_cast<float>(glyph.advance);
 		quad(box2::from_corner_size(offset + vec2{ x + glyph.left * scale, box.v0.y + static_cast<float>(max_bearing_y - glyph.bearing_y) * scale },
-			{ glyph.width * scale, glyph.height * scale }), glyph.uv, vec4(1, 1, 1, 1));
+			{ glyph.width * scale, glyph.height * scale }), glyph.uv, color);
 		x += adv * scale;
 	}
+
+	return 0;
+}
+
+export int gui_label(const box2& box, const u8string& s, const float scale = 1.f) { return gui_label(box, s, scale, color_label_text); }
+
+export int gui_button(const box2& box, const u8string& s, const function<void()>& clicked, const float font_scale = 1.0f)
+{
+	const auto inside = is_vec2_inside_box2(mouse_position, box);
+	if (inside && left_mouse && !gui_state.selected_object && !gui_state.left_mouse_handled)
+	{
+		clicked();
+		gui_state.left_mouse_handled = true;
+	}
+
+	// background
+	quad(box, uv_no_texture, inside ? color_button_face_highlight : color_button_face);
+
+	// text
+	auto ret = gui_label(box.with_offset(-5), s, font_scale, color_button_text);
+	if (!ret) return ret;
 
 	return 0;
 }

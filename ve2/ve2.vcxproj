@@ -177,7 +177,12 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="gui.ixx" />
-    <ClCompile Include="sdf_font.cpp" />
+    <ClCompile Include="sdf_font.cpp">
+      <Optimization Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">MaxSpeed</Optimization>
+      <Optimization Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">MaxSpeed</Optimization>
+      <BasicRuntimeChecks Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Default</BasicRuntimeChecks>
+      <BasicRuntimeChecks Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Default</BasicRuntimeChecks>
+    </ClCompile>
     <ClCompile Include="shader_program.ixx" />
     <ClCompile Include="growable_texture_atlas.ixx" />
     <ClCompile Include="utilities.ixx" />
