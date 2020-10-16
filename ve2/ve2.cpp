@@ -276,7 +276,7 @@ int gl_init()
 	// aspect ratio transforms
 	update_aspect_ratio();
 
-	gui_init(window, make_unique<Font>(vector<const char*>{ "content\\OpenSans-Regular.ttf", "content\\malgun.ttf", "content\\Symbola605.ttf" }, 64));
+	gui_init(window, make_unique<Font>(vector<const char*>{ "content\\OpenSans-Regular.ttf", "content\\NotoSansKR-Regular.otf", "content\\Symbola605.ttf" }, 64));
 
 	// gl state init stuff
 	glClearColor(0, 0, 0, 0);
@@ -287,6 +287,42 @@ int gl_init()
 	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
 	return 0;
+}
+
+void gui_process(const double current_time_sec)
+{
+	// gui layout constants
+	constexpr float left_button_width = 30.f, slider_height = 15.f, slider_margins_x = 5.f, time_position_width = 100.f,
+		play_bar_height = left_button_width;
+	constexpr float font_scale = 0.2f;
+
+	// render the position slider and its label
+	gui_slider(
+		box2::from_corner_size({ left_button_width + slider_margins_x, play_bar_height / 2.f - slider_height / 2.f }, { window_width - time_position_width - slider_margins_x - left_button_width, slider_height }), 0.0f,
+		static_cast<double>(video_stream->duration), static_cast<double>(last_frame_timestamp));
+
+	const auto slider_label = u8_seconds_to_time_string(last_frame_timestamp * av_q2d(video_stream->time_base)) + u8" / " +
+		u8_seconds_to_time_string(video_stream->duration * av_q2d(video_stream->time_base));
+	gui_label(box2::from_corner_size({ window_width - time_position_width, 0 }, { time_position_width, play_bar_height }), slider_label, font_scale);
+
+	// left buttons
+	gui_button(box2::from_corner_size({}, { left_button_width, play_bar_height }), playing ? u8"⬛" : u8"▶", [&]
+		{
+			if (playing = !playing)
+				next_frame_time_sec = next_frame_time_sec_remaining_paused + current_time_sec;
+			else
+			{
+				next_frame_time_sec_remaining_paused = next_frame_time_sec - current_time_sec;
+				next_frame_time_sec = current_time_sec + frame_time_sec_paused;
+			}
+		}, font_scale);
+
+	// render the selection box
+	static SelectionBoxState selection_box_state{};
+	gui_selection_box(active_selection_box, video_pixel_box, playing, selection_box_state);
+
+	// render the gui to screen
+	gui_render();
 }
 
 bool had_underflow = false;
@@ -340,38 +376,7 @@ bool gl_render()
 	glActiveTexture(GL_TEXTURE2); glBindTexture(GL_TEXTURE_2D, yuv_planar_texture_names[2]);
 	glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
 
-	// gui layout constants
-	constexpr float left_button_width = 30.f, slider_height = 15.f, slider_margins_x = 5.f, time_position_width = 100.f,
-		play_bar_height = left_button_width;
-	constexpr float font_scale = 0.2f;
-
-	// render the position slider and its label
-	gui_slider(
-		box2::from_corner_size({ left_button_width + slider_margins_x, play_bar_height / 2.f - slider_height / 2.f }, { window_width - time_position_width - slider_margins_x - left_button_width, slider_height }), 0.0f,
-		static_cast<double>(video_stream->duration), static_cast<double>(last_frame_timestamp));
-
-	const auto slider_label = u8_seconds_to_time_string(last_frame_timestamp * av_q2d(video_stream->time_base)) + u8" / " +
-		u8_seconds_to_time_string(video_stream->duration * av_q2d(video_stream->time_base));
-	gui_label(box2::from_corner_size({ window_width - time_position_width, 0 }, { time_position_width, play_bar_height }), slider_label, font_scale);
-
-	// left buttons
-	gui_button(box2::from_corner_size({}, { left_button_width, play_bar_height }), playing ? u8"⬛" : u8"▶", [&]
-		{
-			if (playing = !playing)
-				next_frame_time_sec = next_frame_time_sec_remaining_paused + current_time_sec;
-			else
-			{
-				next_frame_time_sec_remaining_paused = next_frame_time_sec - current_time_sec;
-				next_frame_time_sec = current_time_sec + frame_time_sec_paused;
-			}
-		}, font_scale);
-
-	// render the selection box
-	static SelectionBoxState selection_box_state{};
-	gui_selection_box(active_selection_box, video_pixel_box, selection_box_state);
-
-	// render the gui to screen
-	gui_render();
+	gui_process(current_time_sec);
 
 	return true;
 }

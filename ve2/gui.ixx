@@ -404,7 +404,7 @@ export int gui_button(const box2& box, const u8string& s, const function<void()>
 	return 0;
 }
 
-export int gui_selection_box(box2& normalized_box, const box2& full_pixel_box, SelectionBoxState& state)
+export int gui_selection_box(box2& normalized_box, const box2& full_pixel_box, const bool read_only, SelectionBoxState& state)
 {
 	const vec2 full_pixel_box_size = full_pixel_box.size();
 	const box2 pixel_box = { normalized_box.v0 * full_pixel_box_size + full_pixel_box.v0, normalized_box.v1 * full_pixel_box_size + full_pixel_box.v0 };
@@ -427,7 +427,7 @@ export int gui_selection_box(box2& normalized_box, const box2& full_pixel_box, S
 do {\
 	const box2 box = _box;\
 	const vec4 *color;\
-	if (is_vec2_inside_box2(mouse_position, box.with_offset(touch_offset)))\
+	if (!read_only && is_vec2_inside_box2(mouse_position, box.with_offset(touch_offset)))\
 	{\
 		next_cursor = SelectionBoxStateSide::_side == SelectionBoxStateSide::Up || SelectionBoxStateSide::_side == SelectionBoxStateSide::Down ? cursor_v : cursor_h;\
 		color = &color_button_face_highlight;\
@@ -457,7 +457,7 @@ do{\
 			box2::from_corner_size(pixel_box.topRight() - vec2{ border, 0 }, { border, pixel_box_size.y })
 		});
 
-	if (!next_cursor && is_vec2_inside_box2(mouse_position, pixel_box))
+	if (!read_only && !next_cursor && is_vec2_inside_box2(mouse_position, pixel_box))
 	{
 		next_cursor = cursor_move;
 		PROCESS_SIDE_HELPER(All);

@@ -25,7 +25,7 @@ Font::Font(const vector<const char*>& font_face_paths, int render_size, int sdf_
 	for (const auto& font_face_path : font_face_paths)
 	{
 		auto& ft_face = ft_faces[index++];
-		FT_New_Face(ft_library, font_face_path, 0, &ft_face);
+		if (FT_New_Face(ft_library, font_face_path, 0, &ft_face)) throw exception("Could not open font file.");
 		FT_Set_Char_Size(ft_face, 0, (FT_F26Dot6)(render_size * (1 << 6)), 0, 0);
 	}
 }
