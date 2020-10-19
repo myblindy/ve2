@@ -5,6 +5,7 @@ import shader_program;
 import vertex_array;
 import gui;
 import utilities;
+import keyframes;
 
 #include "framework.h"
 #include "sdf_font.h"
@@ -36,6 +37,7 @@ condition_variable frames_queue_cv;
 bool playing = true;
 
 box2 video_pixel_box{};
+KeyFrames keyframes;
 box2 active_selection_box{ {0, 0}, {1, 1} };
 
 int av_get_next_frame(function<void(AVFrame*)> process_frame)
@@ -319,7 +321,8 @@ void gui_process(const double current_time_sec)
 
 	// render the selection box
 	static SelectionBoxState selection_box_state{};
-	gui_selection_box(active_selection_box, video_pixel_box, playing, selection_box_state);
+
+	gui_selection_box(active_selection_box, video_pixel_box, playing, [&] { keyframes.add(current_time_sec, active_selection_box); }, selection_box_state);
 
 	// render the gui to screen
 	gui_render();
@@ -347,6 +350,7 @@ bool gl_render()
 
 			frame = frames_queue.front();
 			frames_queue.pop();
+			active_selection_box = keyframes.at(frame->best_effort_timestamp * av_q2d(video_stream->time_base));
 		}
 
 		// upload the data
@@ -383,6 +387,9 @@ bool gl_render()
 
 int main(int argc, const char* argv[])
 {
+	keyframes.add(0, { {.2f, .3f}, {.1f, .7f} });
+	keyframes.add(10, { {.1f, .1f}, {.8f, .5f} });
+
 	if (av_open(argv[1])) return -1;
 
 	if (gl_init()) return -1;

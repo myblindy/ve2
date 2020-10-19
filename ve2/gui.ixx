@@ -85,6 +85,7 @@ export struct SelectionBoxState
 	vec2 last_mouse_position;
 	box2* normalized_box;
 	box2 full_pixel_box;
+	function<void()> changed;
 };
 
 struct
@@ -150,6 +151,7 @@ void cursor_pos_callback(GLFWwindow* window, double x, double y)
 			case SelectionBoxStateSide::_side: \
 				state.normalized_box->_move_func(pixel_delta._field / state.full_pixel_box.size()._field); \
 				state.normalized_box->clamp(0, 0, 1, 1);\
+				state.changed();\
 				break
 
 				PROCESS_SIDE(Up, moveTop, y);
@@ -160,6 +162,7 @@ void cursor_pos_callback(GLFWwindow* window, double x, double y)
 			case SelectionBoxStateSide::All:
 				state.normalized_box->move(pixel_delta / state.full_pixel_box.size());
 				state.normalized_box->clamp(0, 0, 1, 1);
+				state.changed();
 				break;
 
 #undef PROCESS_SIDE
@@ -404,7 +407,7 @@ export int gui_button(const box2& box, const u8string& s, const function<void()>
 	return 0;
 }
 
-export int gui_selection_box(box2& normalized_box, const box2& full_pixel_box, const bool read_only, SelectionBoxState& state)
+export int gui_selection_box(box2& normalized_box, const box2& full_pixel_box, const bool read_only, const function<void()> changed, SelectionBoxState& state)
 {
 	const vec2 full_pixel_box_size = full_pixel_box.size();
 	const box2 pixel_box = { normalized_box.v0 * full_pixel_box_size + full_pixel_box.v0, normalized_box.v1 * full_pixel_box_size + full_pixel_box.v0 };
@@ -420,6 +423,7 @@ export int gui_selection_box(box2& normalized_box, const box2& full_pixel_box, c
 			pSelectionBoxState->last_mouse_position = left_mouse_down_position;\
 			pSelectionBoxState->normalized_box = &normalized_box;\
 			pSelectionBoxState->full_pixel_box = full_pixel_box;\
+			pSelectionBoxState->changed = changed;\
 		}\
 	} while(0) 
 

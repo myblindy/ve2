@@ -100,6 +100,11 @@ namespace glm
 			&& pos.y >= min(box.v0.y, box.v1.y) && pos.y <= max(box.v0.y, box.v1.y);
 	}
 
+	export box2 mix(const box2& from, const box2& to, const float percentage)
+	{
+		return { mix(from.v0, to.v0, percentage), mix(from.v1, to.v1, percentage) };
+	}
+
 	export struct ibox2
 	{
 		ivec2 v0, v1;

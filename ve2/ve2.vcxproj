@@ -177,6 +177,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="gui.ixx" />
+    <ClCompile Include="keyframes.ixx" />
     <ClCompile Include="sdf_font.cpp">
       <Optimization Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">MaxSpeed</Optimization>
       <Optimization Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">MaxSpeed</Optimization>
@@ -195,9 +196,6 @@
   <ItemGroup>
     <Image Include="small.ico" />
     <Image Include="ve2.ico" />
-  </ItemGroup>
-  <ItemGroup>
-    <None Include="gui.button" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

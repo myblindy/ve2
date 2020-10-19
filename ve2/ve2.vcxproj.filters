@@ -80,6 +80,9 @@
     <ClCompile Include="sdf_font.cpp">
       <Filter>Source Files\render</Filter>
     </ClCompile>
+    <ClCompile Include="keyframes.ixx">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="ve2.rc">
@@ -93,8 +96,5 @@
     <Image Include="ve2.ico">
       <Filter>Resource Files</Filter>
     </Image>
-  </ItemGroup>
-  <ItemGroup>
-    <None Include="gui.button" />
   </ItemGroup>
 </Project>
