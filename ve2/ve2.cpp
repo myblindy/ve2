@@ -31,6 +31,7 @@ constexpr double frame_time_sec_paused{ 1.0 / 30.0 };
 double frame_time_sec, next_frame_time_sec = 0, next_frame_time_sec_remaining_paused{};
 
 constexpr int frames_queue_max_length = 10;
+optional<double> seek_timestamp_sec{};					// if set, triggers the frame read thread to clear the frame cache, seek to this position and restart the decoding
 queue<AVFrame*> frames_queue;
 mutex frames_queue_mutex;
 condition_variable frames_queue_cv;
@@ -40,12 +41,16 @@ box2 video_pixel_box{};
 KeyFrames keyframes;
 box2 active_selection_box{ {0, 0}, {1, 1} };
 
-int av_get_next_frame(function<void(AVFrame*)> process_frame)
+int av_get_next_frame(const int64_t skip_pts, function<void(AVFrame* frame)> process_frame)
 {
 	while (av_read_frame(format_context, input_packet) >= 0)
 	{
 		if (input_packet->stream_index == video_stream->index)
 		{
+			// skip frames until we get to the frame we care about
+			if (input_packet->pts < skip_pts)
+				continue;
+
 			// get the frame
 			CHECK_AV_SUCCESS(avcodec_send_packet(codec_decoder_context, input_packet));
 
@@ -128,19 +133,52 @@ int av_open(const char* url)
 	const auto frame_rate_rational = av_guess_frame_rate(format_context, video_stream, nullptr);
 	frame_time_sec = static_cast<double>(frame_rate_rational.den) / frame_rate_rational.num;
 
-	thread([&]()
+	thread([&]
 		{
-			while (av_get_next_frame([&](AVFrame* frame)
-				{
-					auto new_frame = av_deep_clone_frame(frame);
-
-					// queue the frame
-					unique_lock<mutex> lock(frames_queue_mutex);
-					frames_queue_cv.wait(lock, [] { return frames_queue.size() < frames_queue_max_length; });
-					frames_queue.push(new_frame);
-				}) != AVERROR_EOF)
+			do
 			{
-			}
+				optional<double> _seek_timestamp_sec;
+				int64_t ts_pts = INT64_MIN;
+				{
+					lock_guard<mutex> lg(frames_queue_mutex);
+					_seek_timestamp_sec = seek_timestamp_sec;
+				}
+				seek_timestamp_sec.reset();
+
+				// seek if needed
+				if (_seek_timestamp_sec)
+				{
+					// convert seconds to pts
+					ts_pts = av_rescale_q(*_seek_timestamp_sec * AV_TIME_BASE, AVRational{ 1, AV_TIME_BASE }, video_stream->time_base);
+
+					// flush the context
+					avcodec_flush_buffers(codec_decoder_context);
+
+					// seek before the time stamp 
+					av_seek_frame(format_context, video_stream->index, ts_pts, AVSEEK_FLAG_BACKWARD);
+				}
+
+				while (av_get_next_frame(ts_pts, [&](AVFrame* frame)
+					{
+						auto new_frame = av_deep_clone_frame(frame);
+
+						// queue the frame
+						unique_lock<mutex> lock(frames_queue_mutex);
+						frames_queue_cv.wait(lock, [] { return seek_timestamp_sec || frames_queue.size() < frames_queue_max_length; });
+
+						// seek instead if required
+						if (seek_timestamp_sec)
+						{
+							av_frame_unref(new_frame);
+							queue<AVFrame*>().swap(frames_queue);
+							return;
+						}
+
+						frames_queue.push(new_frame);
+					}) != AVERROR_EOF && !seek_timestamp_sec)
+				{
+				}
+			} while (!seek_timestamp_sec);
 		}).detach();
 
 		return 0;

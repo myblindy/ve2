@@ -7,6 +7,7 @@
 #include <iostream>
 #include <span>
 #include <functional>
+#include <optional>
 #include <thread>
 #include <queue>
 #include <vector>
