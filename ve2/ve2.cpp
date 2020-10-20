@@ -275,7 +275,7 @@ int gl_init()
 				#version 460 \n\
 				uniform mat4 transform_matrix; \n\
 				layout(std140) uniform video_buffer_object { \n\
-					vec4 crop_box; \n\
+					vec4 crop_box; // normalized box stored as (x0, y0, x1, y1) \n\
 				}; \n\
 				\n\
 				in vec2 position, uv; \n\
@@ -425,16 +425,18 @@ bool gl_render()
 
 	glClear(GL_COLOR_BUFFER_BIT);
 
-	glUseProgram(shader_program->program_name);
-
+	// set up draw call
+	shader_program->use();
 	full_video_buffer_object->bind(video_program_binding_point);
-
-	glBindVertexArray(video_vertex_array->vertex_array_object_name);
+	video_vertex_array->bind();
 	glActiveTexture(GL_TEXTURE0); glBindTexture(GL_TEXTURE_2D, yuv_planar_texture_names[0]);
 	glActiveTexture(GL_TEXTURE1); glBindTexture(GL_TEXTURE_2D, yuv_planar_texture_names[1]);
 	glActiveTexture(GL_TEXTURE2); glBindTexture(GL_TEXTURE_2D, yuv_planar_texture_names[2]);
+
+	// and draw
 	glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
 
+	// process and draw the gui
 	gui_process(current_time_sec);
 
 	return true;

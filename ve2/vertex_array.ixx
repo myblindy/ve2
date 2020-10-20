@@ -78,6 +78,8 @@ struct VertexArray
 		return unique_ptr<VertexArray<TVertex>>(ret);
 	}
 
+	void bind() { glBindVertexArray(vertex_array_object_name); }
+
 private:
 	void throw_on_invalid_permissions(bool needs_to_grow, bool needs_to_update)
 	{

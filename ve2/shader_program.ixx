@@ -59,10 +59,9 @@ export struct ShaderProgram
 	int program_name;
 	unordered_map<string, int> uniform_locations;
 
-	void uniform_block_binding(const GLuint block_index, const GLuint binding_point)
-	{
-		glUniformBlockBinding(program_name, block_index, binding_point);
-	}
+	void uniform_block_binding(const GLuint block_index, const GLuint binding_point) { glUniformBlockBinding(program_name, block_index, binding_point); }
+
+	void use() { glUseProgram(program_name); }
 };
 
 export enum class ShaderType { Vertex = GL_VERTEX_SHADER, Fragment = GL_FRAGMENT_SHADER };
