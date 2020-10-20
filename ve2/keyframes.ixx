@@ -50,7 +50,7 @@ export struct KeyFrames
 
 	bool add(double frame_time, const box2& box)
 	{
-		const auto next_it = find_if(keyframes.begin(), keyframes.end(), [&](const auto& kf) {return kf.frame_time > frame_time; });
+		const auto next_it = find_if(keyframes.begin(), keyframes.end(), [&](const auto& kf) {return kf.frame_time >= frame_time; });
 
 		if (next_it == keyframes.end())
 		{
@@ -63,6 +63,8 @@ export struct KeyFrames
 
 			keyframes.push_back({ frame_time, box });
 		}
+		else if (next_it->frame_time == frame_time)
+			next_it->box = box;
 		else
 		{
 			// insert before the found iterator

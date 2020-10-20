@@ -359,7 +359,8 @@ void gui_process(const double current_time_sec)
 	// render the selection box
 	static SelectionBoxState selection_box_state{};
 
-	gui_selection_box(active_selection_box, video_pixel_box, playing, [&] { keyframes.add(current_time_sec, active_selection_box); }, selection_box_state);
+	gui_selection_box(active_selection_box, video_pixel_box, playing, 
+		[] { keyframes.add(last_frame_timestamp * av_q2d(video_stream->time_base), active_selection_box); }, selection_box_state);
 
 	// render the gui to screen
 	gui_render();
