@@ -61,14 +61,14 @@ export struct KeyFrames
 				return false;
 			}
 
-			keyframes.push_back({ frame_time, box });
+			keyframes.emplace_back(frame_time, box);
 		}
 		else if (next_it->frame_time == frame_time)
 			next_it->box = box;
 		else
 		{
 			// insert before the found iterator
-			keyframes.insert(next_it, { frame_time, box });
+			keyframes.emplace(next_it, frame_time, box);
 		}
 
 		return true;

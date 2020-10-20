@@ -1,4 +1,4 @@
-module;
+﻿module;
 
 #include <gl/glew.h>
 #include <glfw/glfw3.h>
@@ -7,15 +7,62 @@ module;
 #include <iostream>
 #include <unordered_map>
 #include <initializer_list>
+#include <memory>
 
 export module shader_program;
 
 using namespace std;
 
+export template<typename T>
+struct UniformBufferObject
+{
+	GLuint object_name;
+	T data{};
+
+	static unique_ptr<UniformBufferObject<T>> create()
+	{
+		GLuint name{};
+		glCreateBuffers(1, &name);
+		auto p = new UniformBufferObject<T>(name);
+		glNamedBufferData(p->object_name, sizeof(T), nullptr, GL_DYNAMIC_DRAW);
+
+		return unique_ptr<UniformBufferObject<T>>(p);
+	}
+
+	static unique_ptr<UniformBufferObject<T>> create(const T& data)
+	{
+		GLuint name{};
+		glCreateBuffers(1, &name);
+		auto p = new UniformBufferObject<T>(name);
+		p->data = data;
+		glNamedBufferData(p->object_name, sizeof(T), &data, GL_DYNAMIC_DRAW);
+
+		return unique_ptr<UniformBufferObject<T>>(p);
+	}
+
+	void bind(GLuint binding_point)
+	{
+		glBindBufferBase(GL_UNIFORM_BUFFER, binding_point, object_name);
+	}
+
+	void update()
+	{
+		glNamedBufferSubData(object_name, 0, sizeof(T), &data);
+	}
+
+private:
+	UniformBufferObject(GLuint object_name) : object_name(object_name) {}
+};
+
 export struct ShaderProgram
 {
 	int program_name;
 	unordered_map<string, int> uniform_locations;
+
+	void uniform_block_binding(const GLuint block_index, const GLuint binding_point)
+	{
+		glUniformBlockBinding(program_name, block_index, binding_point);
+	}
 };
 
 export enum class ShaderType { Vertex = GL_VERTEX_SHADER, Fragment = GL_FRAGMENT_SHADER };
@@ -88,6 +135,16 @@ export unique_ptr<ShaderProgram> link_shader_program_from_shader_objects(initial
 		char name[60]{};
 		glGetActiveUniformName(shader_program, i, sizeof(name), nullptr, name);
 		result->uniform_locations[name] = glGetUniformLocation(shader_program, name);
+	}
+
+	GLint blocks_count{};
+	glGetProgramiv(shader_program, GL_ACTIVE_UNIFORM_BLOCKS, &blocks_count);
+
+	for (int i = 0; i < blocks_count; ++i)
+	{
+		char name[60]{};
+		glGetActiveUniformBlockName(shader_program, i, sizeof(name), NULL, name);
+		result->uniform_locations[name] = glGetUniformBlockIndex(shader_program, name);
 	}
 
 	return result;

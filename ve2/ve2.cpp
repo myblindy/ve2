@@ -198,12 +198,19 @@ struct Vertex
 		glVertexArrayAttribBinding(vertex_array_object_name, 1, 0);
 	}
 };
+
+struct VideoBufferObject
+{
+	box2 crop;
+};
 #pragma pack(pop)
 
 unique_ptr<ShaderProgram> shader_program;
 unique_ptr<VertexArray<Vertex>> video_vertex_array;
 constexpr int yuv_planar_textures_count = 3;
 GLuint yuv_planar_texture_names[yuv_planar_textures_count];
+constexpr GLuint video_program_binding_point = 1;
+unique_ptr<UniformBufferObject<VideoBufferObject>> full_video_buffer_object, preview_video_buffer_object;
 
 void update_aspect_ratio()
 {
@@ -255,6 +262,9 @@ int gl_init()
 	glDebugMessageCallback(debug_message_callback, nullptr);
 #endif
 
+	full_video_buffer_object = UniformBufferObject<VideoBufferObject>::create({ { {}, {1, 1} } });
+	preview_video_buffer_object = UniformBufferObject<VideoBufferObject>::create({ { {}, {1, 1} } });
+
 	// shaders
 	string yuv_rgb_color_transform_matrix = codec_decoder_context->colorspace != AVCOL_SPC_BT709
 		? "1, 1, 1, 0, -0.39465, 2.03211, 1.13983, -0.58060, 0"
@@ -264,12 +274,16 @@ int gl_init()
 			compile_shader_from_source("\
 				#version 460 \n\
 				uniform mat4 transform_matrix; \n\
+				layout(std140) uniform video_buffer_object { \n\
+					vec4 crop_box; \n\
+				}; \n\
+				\n\
 				in vec2 position, uv; \n\
 				out vec2 fs_uv; \n\
 				\n\
 				void main() \n\
 				{ \n\
-					fs_uv = uv; \n\
+					fs_uv = vec2(mix(crop_box.x, crop_box.z, uv.x), mix(crop_box.y, crop_box.w, uv.y)); \n\
 					gl_Position = vec4(position, 0, 1) * transform_matrix; \n\
 				}", ShaderType::Vertex),
 			compile_shader_from_source(("\
@@ -310,6 +324,7 @@ int gl_init()
 	glProgramUniform1i(shader_program->program_name, shader_program->uniform_locations["y_texture"], 0);
 	glProgramUniform1i(shader_program->program_name, shader_program->uniform_locations["u_texture"], 1);
 	glProgramUniform1i(shader_program->program_name, shader_program->uniform_locations["v_texture"], 2);
+	shader_program->uniform_block_binding(shader_program->uniform_locations["video_buffer_object"], video_program_binding_point);
 
 	// aspect ratio transforms
 	update_aspect_ratio();
@@ -358,8 +373,7 @@ void gui_process(const double current_time_sec)
 
 	// render the selection box
 	static SelectionBoxState selection_box_state{};
-
-	gui_selection_box(active_selection_box, video_pixel_box, playing, 
+	gui_selection_box(active_selection_box, video_pixel_box, playing,
 		[] { keyframes.add(last_frame_timestamp * av_q2d(video_stream->time_base), active_selection_box); }, selection_box_state);
 
 	// render the gui to screen
@@ -391,6 +405,9 @@ bool gl_render()
 			active_selection_box = keyframes.at(frame->best_effort_timestamp * av_q2d(video_stream->time_base));
 		}
 
+		// notify the decoder thread that we consumed a frame
+		frames_queue_cv.notify_all();
+
 		// upload the data
 		glPixelStorei(GL_UNPACK_ROW_LENGTH, frame->linesize[0]);
 		glTextureSubImage2D(yuv_planar_texture_names[0], 0, 0, 0, video_stream->codecpar->width, video_stream->codecpar->height, GL_RED, GL_UNSIGNED_BYTE, frame->data[0]);
@@ -398,9 +415,6 @@ bool gl_render()
 		glTextureSubImage2D(yuv_planar_texture_names[1], 0, 0, 0, video_stream->codecpar->width / 2, video_stream->codecpar->height / 2, GL_RED, GL_UNSIGNED_BYTE, frame->data[1]);
 		glPixelStorei(GL_UNPACK_ROW_LENGTH, frame->linesize[2]);
 		glTextureSubImage2D(yuv_planar_texture_names[2], 0, 0, 0, video_stream->codecpar->width / 2, video_stream->codecpar->height / 2, GL_RED, GL_UNSIGNED_BYTE, frame->data[2]);
-
-		// notify the decoder thread that we consumed a frame
-		frames_queue_cv.notify_all();
 
 		// frame is processed
 		last_frame_timestamp = frame->best_effort_timestamp;
@@ -412,6 +426,9 @@ bool gl_render()
 	glClear(GL_COLOR_BUFFER_BIT);
 
 	glUseProgram(shader_program->program_name);
+
+	full_video_buffer_object->bind(video_program_binding_point);
+
 	glBindVertexArray(video_vertex_array->vertex_array_object_name);
 	glActiveTexture(GL_TEXTURE0); glBindTexture(GL_TEXTURE_2D, yuv_planar_texture_names[0]);
 	glActiveTexture(GL_TEXTURE1); glBindTexture(GL_TEXTURE_2D, yuv_planar_texture_names[1]);
