@@ -47,10 +47,6 @@ int av_get_next_frame(const int64_t skip_pts, function<void(AVFrame* frame)> pro
 	{
 		if (input_packet->stream_index == video_stream->index)
 		{
-			// skip frames until we get to the frame we care about
-			if (input_packet->pts < skip_pts)
-				continue;
-
 			// get the frame
 			CHECK_AV_SUCCESS(avcodec_send_packet(codec_decoder_context, input_packet));
 
@@ -61,7 +57,9 @@ int av_get_next_frame(const int64_t skip_pts, function<void(AVFrame* frame)> pro
 				if (res == AVERROR(EAGAIN) || res == AVERROR_EOF) break;
 				CHECK_AV_SUCCESS(res);
 
-				process_frame(input_frame);
+				// skip frames as needed for seeking
+				if (input_frame->pts >= skip_pts)
+					process_frame(input_frame);
 
 				av_frame_unref(input_frame);
 
@@ -135,7 +133,7 @@ int av_open(const char* url)
 
 	thread([&]
 		{
-			do
+			while (true)
 			{
 				optional<double> _seek_timestamp_sec;
 				int64_t ts_pts = INT64_MIN;
@@ -149,13 +147,13 @@ int av_open(const char* url)
 				if (_seek_timestamp_sec)
 				{
 					// convert seconds to pts
-					ts_pts = av_rescale_q(*_seek_timestamp_sec * AV_TIME_BASE, AVRational{ 1, AV_TIME_BASE }, video_stream->time_base);
+					ts_pts = *_seek_timestamp_sec / av_q2d(video_stream->time_base);
+
+					// seek before the time stamp 
+					avformat_seek_file(format_context, video_stream->index, INT64_MIN, ts_pts, ts_pts, AVSEEK_FLAG_BACKWARD);
 
 					// flush the context
 					avcodec_flush_buffers(codec_decoder_context);
-
-					// seek before the time stamp 
-					av_seek_frame(format_context, video_stream->index, ts_pts, AVSEEK_FLAG_BACKWARD);
 				}
 
 				while (av_get_next_frame(ts_pts, [&](AVFrame* frame)
@@ -178,7 +176,7 @@ int av_open(const char* url)
 					}) != AVERROR_EOF && !seek_timestamp_sec)
 				{
 				}
-			} while (!seek_timestamp_sec);
+			}
 		}).detach();
 
 		return 0;
@@ -339,7 +337,8 @@ void gui_process(const double current_time_sec)
 	// render the position slider and its label
 	gui_slider(
 		box2::from_corner_size({ left_button_width + slider_margins_x, play_bar_height / 2.f - slider_height / 2.f }, { window_width - time_position_width - slider_margins_x - left_button_width, slider_height }), 0.0f,
-		static_cast<double>(video_stream->duration), static_cast<double>(last_frame_timestamp));
+		static_cast<double>(video_stream->duration), static_cast<double>(last_frame_timestamp),
+		[&](double new_value) { seek_timestamp_sec = new_value * video_stream->duration * av_q2d(video_stream->time_base); });
 
 	const auto slider_label = u8_seconds_to_time_string(last_frame_timestamp * av_q2d(video_stream->time_base)) + u8" / " +
 		u8_seconds_to_time_string(video_stream->duration * av_q2d(video_stream->time_base));

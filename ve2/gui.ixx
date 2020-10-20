@@ -340,7 +340,7 @@ void quad(const box2& box, const box2& uv, const vec4& color)
 	vertex_cache.emplace_back(vec2(box.v0.x, box.v0.y), uv.v0, color);
 }
 
-export int gui_slider(const box2& box, const double min, const double max, const double val)
+export int gui_slider(const box2& box, const double min, const double max, const double val, const function<void(const double)> clicked)
 {
 	// the outer rectangle
 	quad(box, uv_no_texture, vec4(0, 1, 0, 1));
@@ -352,6 +352,13 @@ export int gui_slider(const box2& box, const double min, const double max, const
 	const vec2 thumb_size = { box_size.y, box_size.y };
 	const box2 thumb_box = box2::from_corner_size(thumb_position, thumb_size);
 	quad(thumb_box, uv_no_texture, is_vec2_inside_box2(mouse_position, thumb_box) ? color_button_face_highlight : color_button_face);
+
+	// handle a click
+	if (is_vec2_inside_box2(mouse_position, box) && left_mouse && !gui_state.selected_object && !gui_state.left_mouse_handled)
+	{
+		clicked((mouse_position.x - box.v0.x) / (box.v1.x - box.v0.x));
+		gui_state.left_mouse_handled = true;
+	}
 
 	return 0;
 }
@@ -407,7 +414,7 @@ export int gui_button(const box2& box, const u8string& s, const function<void()>
 	return 0;
 }
 
-export int gui_selection_box(box2& normalized_box, const box2& full_pixel_box, const bool read_only, const function<void()> changed, SelectionBoxState& state)
+export int gui_selection_box(box2& normalized_box, const box2& full_pixel_box, const bool read_only, const function<void()>& changed, SelectionBoxState& state)
 {
 	const vec2 full_pixel_box_size = full_pixel_box.size();
 	const box2 pixel_box = { normalized_box.v0 * full_pixel_box_size + full_pixel_box.v0, normalized_box.v1 * full_pixel_box_size + full_pixel_box.v0 };
