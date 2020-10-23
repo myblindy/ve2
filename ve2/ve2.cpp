@@ -44,7 +44,6 @@ gui_play_bar_height = gui_left_button_width;
 constexpr float gui_font_scale = 0.2f;
 
 // gui boxes
-box2 video_pixel_box{}, preview_video_pixel_box{};
 box2 active_selection_box{ {0, 0}, {1, 1} };
 
 int av_get_next_frame(const int64_t skip_pts, function<void(AVFrame* frame)> process_frame)
@@ -391,7 +390,7 @@ void gui_process(const double current_time_sec)
 
 	// render the selection box
 	static SelectionBoxState selection_box_state{};
-	gui_selection_box(active_selection_box, video_pixel_box, playing,
+	gui_selection_box(active_selection_box, full_video_buffer_object->data.pixel_bounds_box, playing,
 		[] { keyframes.add(last_frame_timestamp * av_q2d(video_stream->time_base), active_selection_box); }, selection_box_state);
 
 	// render the gui to screen
@@ -468,8 +467,8 @@ bool gl_render()
 
 int main(int argc, const char* argv[])
 {
-	keyframes.add(0, { {.2f, .3f}, {.1f, .7f} });
-	keyframes.add(10, { {.1f, .1f}, {.8f, .5f} });
+	keyframes.add(0, { {.2f, .3f}, {.5f, .4f} });
+	keyframes.add(10, { {.3f, .5f}, {.6f, .6f} });
 
 	if (av_open(argv[1])) return -1;
 
