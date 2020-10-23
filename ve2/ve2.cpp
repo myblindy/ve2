@@ -36,9 +36,15 @@ queue<AVFrame*> frames_queue;
 mutex frames_queue_mutex;
 condition_variable frames_queue_cv;
 bool playing = true;
-
-box2 video_pixel_box{};
 KeyFrames keyframes;
+
+// gui layout constants
+constexpr float gui_left_button_width = 30.f, gui_slider_height = 15.f, gui_slider_margins_x = 5.f, gui_time_position_width = 100.f,
+gui_play_bar_height = gui_left_button_width;
+constexpr float gui_font_scale = 0.2f;
+
+// gui boxes
+box2 video_pixel_box{}, preview_video_pixel_box{};
 box2 active_selection_box{ {0, 0}, {1, 1} };
 
 int av_get_next_frame(const int64_t skip_pts, function<void(AVFrame* frame)> process_frame)
@@ -201,7 +207,9 @@ struct Vertex
 
 struct VideoBufferObject
 {
-	box2 crop;
+	box2 normalized_crop_box = { {}, {1, 1} };
+	box2 pixel_bounds_box;
+	vec4 window_and_video_pixel_size;
 };
 #pragma pack(pop)
 
@@ -212,23 +220,22 @@ GLuint yuv_planar_texture_names[yuv_planar_textures_count];
 constexpr GLuint video_program_binding_point = 1;
 unique_ptr<UniformBufferObject<VideoBufferObject>> full_video_buffer_object, preview_video_buffer_object;
 
-void update_aspect_ratio()
+void update_screen_layout()
 {
-	const float ar_window = (float)window_width / window_height, ar_video = (float)video_stream->codecpar->width / video_stream->codecpar->height;
-	const auto aspect_correction = scale(ar_window < ar_video ? vec3(1, ar_window / ar_video, 1) : vec3(ar_video / ar_window, 1, 1));
-	glProgramUniformMatrix4fv(shader_program->program_name, shader_program->uniform_locations["transform_matrix"], 1, false, value_ptr(aspect_correction));
-
-	const vec2 window_size{ window_width, window_height };
-	video_pixel_box = box2{
-		((vec4(-1, -1, 0, 1) * aspect_correction).xy() / 2.0f + .5f) * window_size,
-		((vec4(1, 1, 0, 1) * aspect_correction).xy() / 2.0f + .5f) * window_size
-	};
+	// split the screen horizontally
+	const auto height = (window_height - gui_play_bar_height) / 2;
+	full_video_buffer_object->data.pixel_bounds_box = box2::from_corner_size({ 0, gui_play_bar_height }, { window_width, height });
+	full_video_buffer_object->data.window_and_video_pixel_size = { window_width, window_height, video_stream->codecpar->width, video_stream->codecpar->height };
+	full_video_buffer_object->update();
+	preview_video_buffer_object->data.pixel_bounds_box = box2::from_corner_size({ 0, height + gui_play_bar_height }, { window_width, height });
+	preview_video_buffer_object->data.window_and_video_pixel_size = { window_width, window_height, video_stream->codecpar->width, video_stream->codecpar->height };
+	preview_video_buffer_object->update();
 }
 
 void framebuffer_size_callback(GLFWwindow* window, int width, int height)
 {
 	glViewport(0, 0, window_width = width, window_height = height);
-	update_aspect_ratio();
+	update_screen_layout();
 	if (previous_framebuffer_size_callback) previous_framebuffer_size_callback(window, width, height);
 }
 
@@ -262,8 +269,8 @@ int gl_init()
 	glDebugMessageCallback(debug_message_callback, nullptr);
 #endif
 
-	full_video_buffer_object = UniformBufferObject<VideoBufferObject>::create({ { {}, {1, 1} } });
-	preview_video_buffer_object = UniformBufferObject<VideoBufferObject>::create({ { {}, {1, 1} } });
+	full_video_buffer_object = UniformBufferObject<VideoBufferObject>::create();
+	preview_video_buffer_object = UniformBufferObject<VideoBufferObject>::create();
 
 	// shaders
 	string yuv_rgb_color_transform_matrix = codec_decoder_context->colorspace != AVCOL_SPC_BT709
@@ -273,9 +280,10 @@ int gl_init()
 		{
 			compile_shader_from_source("\
 				#version 460 \n\
-				uniform mat4 transform_matrix; \n\
 				layout(std140) uniform video_buffer_object { \n\
-					vec4 crop_box; // normalized box stored as (x0, y0, x1, y1) \n\
+					vec4 normalized_crop_box; // normalized box stored as (x0, y0, x1, y1) to represent the crop view \n\
+					vec4 pixel_bounds_box;    // pixel box stored as (x0, y0, x1, y1) to represent the full bounds available \n\
+					vec4 window_and_video_pixel_size; \n\
 				}; \n\
 				\n\
 				in vec2 position, uv; \n\
@@ -283,8 +291,23 @@ int gl_init()
 				\n\
 				void main() \n\
 				{ \n\
-					fs_uv = vec2(mix(crop_box.x, crop_box.z, uv.x), mix(crop_box.y, crop_box.w, uv.y)); \n\
-					gl_Position = vec4(position, 0, 1) * transform_matrix; \n\
+					fs_uv = vec2(mix(normalized_crop_box.x, normalized_crop_box.z, uv.x), mix(normalized_crop_box.y, normalized_crop_box.w, uv.y)); \n\
+					\n\
+					const float ar_bounds = (pixel_bounds_box.z - pixel_bounds_box.x) / (pixel_bounds_box.w - pixel_bounds_box.y), \n\
+						ar_crop = (normalized_crop_box.z - normalized_crop_box.x) / (normalized_crop_box.w - normalized_crop_box.y), \n\
+						ar_video = (window_and_video_pixel_size.z / window_and_video_pixel_size.w) * ar_crop; \n\
+					const vec2 aspect_correction = ar_bounds < ar_video ? vec2(1, ar_bounds / ar_video) : vec2(ar_video / ar_bounds, 1); \n\
+					const vec4 aspect_corrected_pixel_box = vec4( \n\
+						pixel_bounds_box.x * aspect_correction.x, pixel_bounds_box.y * aspect_correction.y, \n\
+						pixel_bounds_box.z * aspect_correction.x, pixel_bounds_box.w * aspect_correction.y); \n\
+					const vec2 offset = vec2( \n\
+						(pixel_bounds_box.z - pixel_bounds_box.x) / 2 - (aspect_corrected_pixel_box.z - aspect_corrected_pixel_box.x) / 2,\n\
+						(pixel_bounds_box.w - pixel_bounds_box.y) / 2 - (aspect_corrected_pixel_box.w - aspect_corrected_pixel_box.y) / 2);\n\
+					const vec2 aspect_corrected_normalized_position = vec2( \n\
+						mix(aspect_corrected_pixel_box.x + offset.x, aspect_corrected_pixel_box.z + offset.x, (position.x + 1) / 2), \n\
+						mix(aspect_corrected_pixel_box.y + offset.y, aspect_corrected_pixel_box.w + offset.y, (position.y + 1) / 2)) \n\
+						/ window_and_video_pixel_size.xy * 2 - 1; \n\
+					gl_Position = vec4(aspect_corrected_normalized_position, 0, 1); \n\
 				}", ShaderType::Vertex),
 			compile_shader_from_source(("\
 				#version 460 \n\
@@ -327,7 +350,7 @@ int gl_init()
 	shader_program->uniform_block_binding(shader_program->uniform_locations["video_buffer_object"], video_program_binding_point);
 
 	// aspect ratio transforms
-	update_aspect_ratio();
+	update_screen_layout();
 
 	gui_init(window, make_unique<Font>(vector<const char*>{ "content\\OpenSans-Regular.ttf", "content\\NotoSansKR-Regular.otf", "content\\Symbola605.ttf" }, 64));
 
@@ -344,23 +367,18 @@ int gl_init()
 
 void gui_process(const double current_time_sec)
 {
-	// gui layout constants
-	constexpr float left_button_width = 30.f, slider_height = 15.f, slider_margins_x = 5.f, time_position_width = 100.f,
-		play_bar_height = left_button_width;
-	constexpr float font_scale = 0.2f;
-
 	// render the position slider and its label
 	gui_slider(
-		box2::from_corner_size({ left_button_width + slider_margins_x, play_bar_height / 2.f - slider_height / 2.f }, { window_width - time_position_width - slider_margins_x - left_button_width, slider_height }), 0.0f,
+		box2::from_corner_size({ gui_left_button_width + gui_slider_margins_x, gui_play_bar_height / 2.f - gui_slider_height / 2.f }, { window_width - gui_time_position_width - gui_slider_margins_x - gui_left_button_width, gui_slider_height }), 0.0f,
 		static_cast<double>(video_stream->duration), static_cast<double>(last_frame_timestamp),
 		[&](double new_value) { seek_timestamp_sec = new_value * video_stream->duration * av_q2d(video_stream->time_base); });
 
 	const auto slider_label = u8_seconds_to_time_string(last_frame_timestamp * av_q2d(video_stream->time_base)) + u8" / " +
 		u8_seconds_to_time_string(video_stream->duration * av_q2d(video_stream->time_base));
-	gui_label(box2::from_corner_size({ window_width - time_position_width, 0 }, { time_position_width, play_bar_height }), slider_label, font_scale);
+	gui_label(box2::from_corner_size({ window_width - gui_time_position_width, 0 }, { gui_time_position_width, gui_play_bar_height }), slider_label, gui_font_scale);
 
 	// left buttons
-	gui_button(box2::from_corner_size({}, { left_button_width, play_bar_height }), playing ? u8"⬛" : u8"▶", [&]
+	gui_button(box2::from_corner_size({}, { gui_left_button_width, gui_play_bar_height }), playing ? u8"⬛" : u8"▶", [&]
 		{
 			if (playing = !playing)
 				next_frame_time_sec = next_frame_time_sec_remaining_paused + current_time_sec;
@@ -369,7 +387,7 @@ void gui_process(const double current_time_sec)
 				next_frame_time_sec_remaining_paused = next_frame_time_sec - current_time_sec;
 				next_frame_time_sec = current_time_sec + frame_time_sec_paused;
 			}
-		}, font_scale);
+		}, gui_font_scale);
 
 	// render the selection box
 	static SelectionBoxState selection_box_state{};
@@ -427,13 +445,19 @@ bool gl_render()
 
 	// set up draw call
 	shader_program->use();
-	full_video_buffer_object->bind(video_program_binding_point);
 	video_vertex_array->bind();
 	glActiveTexture(GL_TEXTURE0); glBindTexture(GL_TEXTURE_2D, yuv_planar_texture_names[0]);
 	glActiveTexture(GL_TEXTURE1); glBindTexture(GL_TEXTURE_2D, yuv_planar_texture_names[1]);
 	glActiveTexture(GL_TEXTURE2); glBindTexture(GL_TEXTURE_2D, yuv_planar_texture_names[2]);
 
-	// and draw
+	// and draw the video 
+	full_video_buffer_object->bind(video_program_binding_point);
+	glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+
+	// and the preview
+	preview_video_buffer_object->data.normalized_crop_box = active_selection_box;
+	preview_video_buffer_object->update();
+	preview_video_buffer_object->bind(video_program_binding_point);
 	glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
 
 	// process and draw the gui

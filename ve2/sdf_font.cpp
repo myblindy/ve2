@@ -71,6 +71,8 @@ vector<FontGlyph> Font::get_glyph_data(const u8string& s)
 
 				// store the datum
 				character_font_data.insert(make_pair(c32, *font_datum));
+
+				break;
 			}
 		else
 			font_datum = font_data_iterator->second;
