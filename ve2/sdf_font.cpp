@@ -66,7 +66,7 @@ vector<FontGlyph> Font::get_glyph_data(const u8string& s)
 					static_cast<int>(glyph.left),
 					static_cast<int>(-glyph.top),
 					glyph.bearing_y,
-					{ atlas->get_uv<0>(atlas_index), atlas->get_uv<1>(atlas_index) }
+					atlas->get_uv(atlas_index)
 				};
 
 				// store the datum

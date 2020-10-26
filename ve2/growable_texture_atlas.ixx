@@ -7,6 +7,8 @@ module;
 
 export module growable_texture_atlas;
 
+import utilities;
+
 using namespace std;
 using namespace glm;
 
@@ -38,8 +40,7 @@ export enum class GrowableTextureAtlasFilter
 
 struct node
 {
-	node(const vec2& uv0, const vec2& uv1) : uv0(uv0), uv1(uv1) {}
-	vec2 uv0, uv1;
+	box2 uv_box;
 };
 
 export struct GrowableTextureAtlas
@@ -88,9 +89,11 @@ export struct GrowableTextureAtlas
 				texture_storage_format, texture_storage_pixel_type, data);
 		}
 
-		nodes.emplace_back(
-			vec2((float)current_position.x / texture_size.x, (float)current_position.y / texture_size.y),
-			vec2((float)(current_position.x + size.x) / texture_size.x, (float)(current_position.y + size.y) / texture_size.y));
+		nodes.emplace_back(box2
+			{
+				vec2((float)current_position.x / texture_size.x, (float)current_position.y / texture_size.y),
+				vec2((float)(current_position.x + size.x) / texture_size.x, (float)(current_position.y + size.y) / texture_size.y)
+			});
 
 		// advance
 		current_position.x += size.x;
@@ -99,8 +102,7 @@ export struct GrowableTextureAtlas
 		return nodes.size() - 1;
 	}
 
-	template<int which>
-	vec2 get_uv(size_t index) const { return which == 0 ? nodes[index].uv0 : nodes[index].uv1; }
+	const box2& get_uv(size_t index) const { return nodes[index].uv_box; }
 
 private:
 	GLenum texture_storage_format, texture_storage_pixel_type;
