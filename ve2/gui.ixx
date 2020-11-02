@@ -154,10 +154,10 @@ void cursor_pos_callback(GLFWwindow* window, double x, double y)
 				state.changed();\
 				break
 
-				PROCESS_SIDE(Up, moveTop, y);
-				PROCESS_SIDE(Down, moveBottom, y);
-				PROCESS_SIDE(Left, moveLeft, x);
-				PROCESS_SIDE(Right, moveRight, x);
+				PROCESS_SIDE(Up, move_top, y);
+				PROCESS_SIDE(Down, move_bottom, y);
+				PROCESS_SIDE(Left, move_left, x);
+				PROCESS_SIDE(Right, move_right, x);
 
 			case SelectionBoxStateSide::All:
 				state.normalized_box->move(pixel_delta / state.full_pixel_box.size());
@@ -462,10 +462,10 @@ do{\
 
 	PROCESS_SIDES(
 		{
-			box2::from_corner_size(pixel_box.topLeft(), { pixel_box_size.x, border }),
-			box2::from_corner_size(pixel_box.bottomLeft() - vec2{ 0, border }, { pixel_box_size.x, border }),
-			box2::from_corner_size(pixel_box.topLeft(), { border, pixel_box_size.y }),
-			box2::from_corner_size(pixel_box.topRight() - vec2{ border, 0 }, { border, pixel_box_size.y })
+			box2::from_corner_size(pixel_box.top_left(), { pixel_box_size.x, border }),
+			box2::from_corner_size(pixel_box.bottom_left() - vec2{ 0, border }, { pixel_box_size.x, border }),
+			box2::from_corner_size(pixel_box.top_left(), { border, pixel_box_size.y }),
+			box2::from_corner_size(pixel_box.top_right() - vec2{ border, 0 }, { border, pixel_box_size.y })
 		});
 
 	if (!read_only && !next_cursor && is_vec2_inside_box2(mouse_position, pixel_box))

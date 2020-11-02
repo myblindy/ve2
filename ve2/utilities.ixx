@@ -65,17 +65,22 @@ namespace glm
 
 		static box2 from_corner_size(const vec2& pos, const vec2& size) { return { pos, pos + size }; }
 
+		float x() const { return v0.x; }
+		float y() const { return v0.y; }
+		float z() const { return v1.x; }
+		float w() const { return v1.y; }
+
 		vec2 size() const { return v1 - v0; }
 
-		vec2 topLeft() const { return v0; }
-		vec2 topRight() const { return { v1.x, v0.y }; }
-		vec2 bottomLeft() const { return { v0.x, v1.y }; }
-		vec2 bottomRight() const { return v1; }
+		vec2 top_left() const { return v0; }
+		vec2 top_right() const { return { v1.x, v0.y }; }
+		vec2 bottom_left() const { return { v0.x, v1.y }; }
+		vec2 bottom_right() const { return v1; }
 
-		void moveTop(const float deltaY) { v0.y += deltaY; }
-		void moveBottom(const float deltaY) { v1.y += deltaY; }
-		void moveLeft(const float deltaX) { v0.x += deltaX; }
-		void moveRight(const float deltaX) { v1.x += deltaX; }
+		void move_top(const float deltaY) { v0.y += deltaY; }
+		void move_bottom(const float deltaY) { v1.y += deltaY; }
+		void move_left(const float deltaX) { v0.x += deltaX; }
+		void move_right(const float deltaX) { v1.x += deltaX; }
 		void move(const vec2& delta) { v0 += delta; v1 += delta; }
 
 		void clamp(float x0, float y0, float x1, float y1)

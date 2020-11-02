@@ -297,14 +297,14 @@ int gl_init()
 						ar_video = (window_and_video_pixel_size.z / window_and_video_pixel_size.w) * ar_crop; \n\
 					const vec2 aspect_correction = ar_bounds < ar_video ? vec2(1, ar_bounds / ar_video) : vec2(ar_video / ar_bounds, 1); \n\
 					const vec4 aspect_corrected_pixel_box = vec4( \n\
-						pixel_bounds_box.x * aspect_correction.x, pixel_bounds_box.y * aspect_correction.y, \n\
-						pixel_bounds_box.z * aspect_correction.x, pixel_bounds_box.w * aspect_correction.y); \n\
+						pixel_bounds_box.xy * aspect_correction, \n\
+						pixel_bounds_box.zw * aspect_correction); \n\
 					const vec2 offset = vec2( \n\
-						(pixel_bounds_box.z - pixel_bounds_box.x) / 2 - (aspect_corrected_pixel_box.z - aspect_corrected_pixel_box.x) / 2,\n\
-						(pixel_bounds_box.w - pixel_bounds_box.y) / 2 - (aspect_corrected_pixel_box.w - aspect_corrected_pixel_box.y) / 2);\n\
+						(pixel_bounds_box.z - pixel_bounds_box.x) / 2 - (aspect_corrected_pixel_box.z - aspect_corrected_pixel_box.x) / 2 + pixel_bounds_box.x - aspect_corrected_pixel_box.x,\n\
+						(pixel_bounds_box.w - pixel_bounds_box.y) / 2 - (aspect_corrected_pixel_box.w - aspect_corrected_pixel_box.y) / 2 + pixel_bounds_box.y - aspect_corrected_pixel_box.y);\n\
 					const vec2 aspect_corrected_normalized_position = vec2( \n\
-						mix(aspect_corrected_pixel_box.x + offset.x, aspect_corrected_pixel_box.z + offset.x, (position.x + 1) / 2), \n\
-						mix(aspect_corrected_pixel_box.y + offset.y, aspect_corrected_pixel_box.w + offset.y, (position.y + 1) / 2)) \n\
+						mix(aspect_corrected_pixel_box.x, aspect_corrected_pixel_box.z, (position.x + 1) / 2) + offset.x, \n\
+						mix(aspect_corrected_pixel_box.y, aspect_corrected_pixel_box.w, (position.y + 1) / 2) + offset.y) \n\
 						/ window_and_video_pixel_size.xy * 2 - 1; \n\
 					gl_Position = vec4(aspect_corrected_normalized_position, 0, 1); \n\
 				}", ShaderType::Vertex),
@@ -364,6 +364,21 @@ int gl_init()
 	return 0;
 }
 
+box2 get_aspect_corrected_video_pixel_bounds_box()
+{
+	const float ar_bounds = (full_video_buffer_object->data.pixel_bounds_box.v1.x - full_video_buffer_object->data.pixel_bounds_box.v0.x) / (full_video_buffer_object->data.pixel_bounds_box.v1.y - full_video_buffer_object->data.pixel_bounds_box.v0.y),
+		ar_video = (full_video_buffer_object->data.window_and_video_pixel_size.z / full_video_buffer_object->data.window_and_video_pixel_size.w);
+	const vec2 aspect_correction = ar_bounds < ar_video ? vec2(1, ar_bounds / ar_video) : vec2(ar_video / ar_bounds, 1);
+	const box2 aspect_corrected_pixel_box = {
+		full_video_buffer_object->data.pixel_bounds_box.top_left() * aspect_correction,
+		full_video_buffer_object->data.pixel_bounds_box.bottom_right() * aspect_correction
+	};
+	const vec2 offset = vec2(
+		(full_video_buffer_object->data.pixel_bounds_box.z() - full_video_buffer_object->data.pixel_bounds_box.x()) / 2 - (aspect_corrected_pixel_box.z() - aspect_corrected_pixel_box.x()) / 2 + aspect_corrected_pixel_box.x(),
+		(full_video_buffer_object->data.pixel_bounds_box.w() - full_video_buffer_object->data.pixel_bounds_box.y()) / 2 - (aspect_corrected_pixel_box.w() - aspect_corrected_pixel_box.y()) / 2 + aspect_corrected_pixel_box.y());
+	return box2::from_corner_size(offset, aspect_corrected_pixel_box.size());
+}
+
 void gui_process(const double current_time_sec)
 {
 	// render the position slider and its label
@@ -388,9 +403,9 @@ void gui_process(const double current_time_sec)
 			}
 		}, gui_font_scale);
 
-	// render the selection box
+	// render the selection box -- need to figure out the aspect corrected position of the main video player
 	static SelectionBoxState selection_box_state{};
-	gui_selection_box(active_selection_box, full_video_buffer_object->data.pixel_bounds_box, playing,
+	gui_selection_box(active_selection_box, get_aspect_corrected_video_pixel_bounds_box(), playing,
 		[] { keyframes.add(last_frame_timestamp * av_q2d(video_stream->time_base), active_selection_box); }, selection_box_state);
 
 	// render the gui to screen
