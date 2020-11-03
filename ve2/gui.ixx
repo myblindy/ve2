@@ -11,17 +11,17 @@ module;
 #include <glfw/glfw3.h>
 #include "sdf_font.h"
 
-export module gui;
-
-#define STB_IMAGE_IMPLEMENTATION
-#include "stb_image.h"
-
 import shader_program;
 import vertex_array;
 import utilities;
 
 using namespace std;
 using namespace glm;
+
+export module gui;
+
+#define STB_IMAGE_IMPLEMENTATION
+#include "stb_image.h"
 
 namespace gui_priv
 {
@@ -161,7 +161,7 @@ void cursor_pos_callback(GLFWwindow* window, double x, double y)
 
 			case SelectionBoxStateSide::All:
 				state.normalized_box->move(pixel_delta / state.full_pixel_box.size());
-				state.normalized_box->clamp(0, 0, 1, 1);
+				state.normalized_box->clamp_slide(0, 0, 1, 1);
 				state.changed();
 				break;
 
@@ -414,7 +414,8 @@ export int gui_button(const box2& box, const u8string& s, const function<void()>
 	return 0;
 }
 
-export int gui_selection_box(box2& normalized_box, const box2& full_pixel_box, const bool read_only, const function<void()>& changed, SelectionBoxState& state)
+export int gui_selection_box(box2& normalized_box, const box2& full_pixel_box, const bool read_only, const vec4& base_color,
+	const optional<float> &aspect_ratio, const function<void()>& changed, SelectionBoxState& state)
 {
 	const vec2 full_pixel_box_size = full_pixel_box.size();
 	const box2 pixel_box = { normalized_box.v0 * full_pixel_box_size + full_pixel_box.v0, normalized_box.v1 * full_pixel_box_size + full_pixel_box.v0 };
@@ -446,7 +447,7 @@ do {\
 		PROCESS_SIDE_HELPER(_side);\
 	}\
 	else\
-		color = &color_button_face;\
+		color = &base_color;\
 	quad(box, uv_no_texture, *color);\
 } while(0)
 

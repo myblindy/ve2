@@ -5,12 +5,12 @@ module;
 #include <memory>
 #include <vector>
 
-export module growable_texture_atlas;
-
 import utilities;
 
 using namespace std;
 using namespace glm;
+
+export module growable_texture_atlas;
 
 export enum class GrowableTextureAtlasInternalStorageType
 {

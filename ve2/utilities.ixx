@@ -3,10 +3,10 @@ module;
 #include <memory>
 #include <string>
 
-export module utilities;
-
 using namespace std;
 using namespace glm;
+
+export module utilities;
 
 export unique_ptr<char[]> mem_new_dup(const char* data, const size_t length)
 {
@@ -83,6 +83,8 @@ namespace glm
 		void move_right(const float deltaX) { v1.x += deltaX; }
 		void move(const vec2& delta) { v0 += delta; v1 += delta; }
 
+
+
 		void clamp(float x0, float y0, float x1, float y1)
 		{
 			if (v0.x < x0) v0.x = x0;
@@ -94,6 +96,19 @@ namespace glm
 			if (v0.y > y1) v0.y = y1;
 			if (v1.x > x1) v1.x = x1;
 			if (v1.y > y1) v1.y = y1;
+		}
+
+		void clamp_slide(float x0, float y0, float x1, float y1)
+		{
+			if (v0.x < x0) { v1.x -= v0.x - x0; v0.x = x0; }
+			if (v0.y < y0) { v1.y -= v0.y - y0; v0.y = y0; }
+			if (v1.x < x0) { v0.y -= v1.x - x0; v1.x = x0; }
+			if (v1.y < y0) { v0.y -= v1.y - y0; v1.y = y0; }
+
+			if (v0.x > x1) { v1.x -= v0.x - x1; v0.x = x1; }
+			if (v0.y > y1) { v1.y -= v0.y - y1; v0.y = y1; }
+			if (v1.x > x1) { v0.x -= v1.x - x1; v1.x = x1; }
+			if (v1.y > y1) { v0.y -= v1.y - y1; v1.y = y1; }
 		}
 
 		box2 with_offset(const float offset) const { return { v0 - offset, v1 + offset }; }

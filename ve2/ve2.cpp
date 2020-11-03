@@ -45,6 +45,7 @@ constexpr float gui_font_scale = 0.2f;
 
 // gui boxes
 box2 active_selection_box{ {0, 0}, {1, 1} };
+bool active_selection_box_is_keyframe = false;
 
 int av_get_next_frame(const int64_t skip_pts, function<void(AVFrame* frame)> process_frame)
 {
@@ -278,7 +279,7 @@ int gl_init()
 	shader_program = link_shader_program_from_shader_objects(
 		{
 			compile_shader_from_source("\
-				#version 460 \n\
+				#version 460 core \n\
 				layout(std140) uniform video_buffer_object { \n\
 					vec4 normalized_crop_box; // normalized box stored as (x0, y0, x1, y1) to represent the crop view \n\
 					vec4 pixel_bounds_box;    // pixel box stored as (x0, y0, x1, y1) to represent the full bounds available \n\
@@ -309,7 +310,7 @@ int gl_init()
 					gl_Position = vec4(aspect_corrected_normalized_position, 0, 1); \n\
 				}", ShaderType::Vertex),
 			compile_shader_from_source(("\
-				#version 460 \n\
+				#version 460 core \n\
 				uniform sampler2D y_texture, u_texture, v_texture; \n\
 				in vec2 fs_uv; \n\
 				out vec4 color; \n\
@@ -406,7 +407,12 @@ void gui_process(const double current_time_sec)
 	// render the selection box -- need to figure out the aspect corrected position of the main video player
 	static SelectionBoxState selection_box_state{};
 	gui_selection_box(active_selection_box, get_aspect_corrected_video_pixel_bounds_box(), playing,
-		[] { keyframes.add(last_frame_timestamp * av_q2d(video_stream->time_base), active_selection_box); }, selection_box_state);
+		active_selection_box_is_keyframe ? vec4(1, 0, 1, 1) : vec4(1, 1, 1, 1), keyframes.aspect_ratio(),
+		[]
+		{
+			keyframes.add(last_frame_timestamp * av_q2d(video_stream->time_base), active_selection_box);
+			active_selection_box_is_keyframe = true;
+		}, selection_box_state);
 
 	// render the gui to screen
 	gui_render();
@@ -434,7 +440,10 @@ bool gl_render()
 
 			frame = frames_queue.front();
 			frames_queue.pop();
-			active_selection_box = keyframes.at(frame->best_effort_timestamp * av_q2d(video_stream->time_base));
+
+			const auto ts = frame->best_effort_timestamp * av_q2d(video_stream->time_base);
+			active_selection_box = keyframes.at(ts);
+			active_selection_box_is_keyframe = keyframes.contains(ts);
 		}
 
 		// notify the decoder thread that we consumed a frame

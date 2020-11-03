@@ -2,13 +2,14 @@ module;
 
 #include <vector>
 #include <algorithm>
-
-export module keyframes;
+#include <optional>
 
 import utilities;
 
 using namespace std;
 using namespace glm;
+
+export module keyframes;
 
 export struct KeyFrame
 {
@@ -44,6 +45,13 @@ export struct KeyFrames
 		}
 
 		return *last_box;
+	}
+
+	optional<float> aspect_ratio()
+	{
+		if (keyframes.empty()) return {};
+		const auto& first_box_size = keyframes[0].box.size();
+		return first_box_size.x / first_box_size.y;
 	}
 
 	bool contains(double frame_time) { return find_if(keyframes.begin(), keyframes.end(), [&](const auto& kf) {return kf.frame_time == frame_time; }) != keyframes.end(); }

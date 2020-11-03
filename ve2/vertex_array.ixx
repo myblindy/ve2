@@ -3,9 +3,9 @@ module;
 #include <glfw/glfw3.h>
 #include <memory>
 
-export module vertex_array;
-
 using namespace std;
+
+export module vertex_array;
 
 template<typename T>
 concept HasSetupGlArrayAttributeFunction = requires (T t) { T::setup_gl_array_attributes((GLuint)0); };
