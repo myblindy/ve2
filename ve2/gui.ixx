@@ -9,11 +9,11 @@ module;
 #include <glm/glm.hpp>
 #include <gl/glew.h>
 #include <glfw/glfw3.h>
-#include "sdf_font.h"
 
 import shader_program;
 import vertex_array;
 import utilities;
+import sdf_font;
 
 using namespace std;
 using namespace glm;

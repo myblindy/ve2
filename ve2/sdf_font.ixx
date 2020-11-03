@@ -1,15 +1,60 @@
+module;
+
 #define _SILENCE_ALL_CXX17_DEPRECATION_WARNINGS
 #include <locale>
 #include <codecvt>
 #include <optional>
-#include "sdf_font.h"
-#include "mapbox/glyph_foundry_impl.hpp"
+#include <glm/glm.hpp>
+#include <gl/glew.h>
+#include <memory>
+#include <vector>
+#include <string>
+#include <unordered_map>
+
+#include <boost/geometry.hpp>
+#include <boost/geometry/geometries/point.hpp>
+#include <boost/geometry/geometries/box.hpp>
+#include <boost/geometry/index/rtree.hpp>
+
+#include "mapbox/glyph_foundry.hpp"
+#include "agg/agg_curves.h"
 
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include "stb_image_write.h"
 
+import growable_texture_atlas;
+import utilities;
+
 using namespace std;
 using namespace glm;
+
+export module sdf_font;
+
+#include "mapbox/glyph_foundry_impl.hpp"
+
+export struct FontGlyph
+{
+	size_t atlas_index;
+	double advance;
+	int width, height, left, top;
+	double bearing_y;
+	glm::box2 uv;
+};
+
+export struct Font
+{
+	Font(const std::vector<const char*>& font_face_paths, int render_size = 512, int sdf_size = 32);
+	std::vector<FontGlyph> get_glyph_data(const std::u8string& s);
+	void bind() const { glBindTexture(GL_TEXTURE_2D, atlas->texture_name); }
+
+private:
+	int sdf_size;
+
+	std::vector<FT_Face> ft_faces;
+
+	std::unordered_map<char32_t, FontGlyph> character_font_data;
+	std::unique_ptr<GrowableTextureAtlas> atlas;
+};
 
 // statically init the library
 FT_Library ft_library;

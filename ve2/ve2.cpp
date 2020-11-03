@@ -6,9 +6,9 @@ import vertex_array;
 import gui;
 import utilities;
 import keyframes;
+import sdf_font;
 
 #include "framework.h"
-#include "sdf_font.h"
 
 using namespace std;
 using namespace glm;

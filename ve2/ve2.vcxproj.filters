@@ -54,9 +54,6 @@
     <ClInclude Include="agg\agg_math.h">
       <Filter>Source Files\render\glyph_foundry</Filter>
     </ClInclude>
-    <ClInclude Include="sdf_font.h">
-      <Filter>Source Files\render</Filter>
-    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="ve2.cpp">
@@ -77,11 +74,11 @@
     <ClCompile Include="growable_texture_atlas.ixx">
       <Filter>Source Files\render</Filter>
     </ClCompile>
-    <ClCompile Include="sdf_font.cpp">
-      <Filter>Source Files\render</Filter>
-    </ClCompile>
     <ClCompile Include="keyframes.ixx">
       <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="sdf_font.ixx">
+      <Filter>Source Files\render</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
