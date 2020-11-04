@@ -20,6 +20,7 @@ char av_error_buffer[2048];
 GLFWwindow* window;
 int window_width, window_height;
 GLFWframebuffersizefun previous_framebuffer_size_callback;
+GLFWkeyfun previous_key_callback;
 
 AVFormatContext* format_context{};
 AVFrame* input_frame;
@@ -35,7 +36,7 @@ optional<double> seek_timestamp_sec{};					// if set, triggers the frame read th
 queue<AVFrame*> frames_queue;
 mutex frames_queue_mutex;
 condition_variable frames_queue_cv;
-bool playing = true;
+bool playing = true, seek_needs_display = false;
 KeyFrames keyframes;
 
 // gui layout constants
@@ -153,7 +154,7 @@ int av_open(const char* url)
 				if (_seek_timestamp_sec)
 				{
 					// convert seconds to pts
-					ts_pts = *_seek_timestamp_sec / av_q2d(video_stream->time_base);
+					ts_pts = static_cast<int64_t>(*_seek_timestamp_sec / av_q2d(video_stream->time_base));
 
 					// seek before the time stamp 
 					avformat_seek_file(format_context, video_stream->index, INT64_MIN, ts_pts, ts_pts, AVSEEK_FLAG_BACKWARD);
@@ -174,7 +175,6 @@ int av_open(const char* url)
 						if (seek_timestamp_sec)
 						{
 							av_frame_unref(new_frame);
-							queue<AVFrame*>().swap(frames_queue);
 							return;
 						}
 
@@ -232,11 +232,61 @@ void update_screen_layout()
 	preview_video_buffer_object->update();
 }
 
+// needs to be under a frames_queue_mutex lock
+void clear_frames_queue()
+{
+	// clear the queue and free up the allocated frames
+	while (!frames_queue.empty())
+	{
+		av_frame_unref(frames_queue.front());
+		frames_queue.pop();
+	}
+
+	// notify the decoder thread that we need more frames to replace what we just cleared
+	frames_queue_cv.notify_all();
+}
+
+void seek_pts(int64_t pts)
+{
+	seek_timestamp_sec = pts * av_q2d(video_stream->time_base);
+	{
+		lock_guard<mutex> lock(frames_queue_mutex);
+		clear_frames_queue();
+	}
+	seek_needs_display = true;
+}
+
+void toggle_play(double current_time_sec)
+{
+	if (playing = !playing)
+		next_frame_time_sec = next_frame_time_sec_remaining_paused + current_time_sec; // now playing
+	else
+	{
+		next_frame_time_sec_remaining_paused = next_frame_time_sec - current_time_sec; // now paused
+		next_frame_time_sec = current_time_sec + frame_time_sec_paused;
+	}
+}
+
 void framebuffer_size_callback(GLFWwindow* window, int width, int height)
 {
 	glViewport(0, 0, window_width = width, window_height = height);
 	update_screen_layout();
 	if (previous_framebuffer_size_callback) previous_framebuffer_size_callback(window, width, height);
+}
+
+void key_callback(GLFWwindow* window, int key, int scancode, int action, int mods)
+{
+	// HOME seeks at the beginning
+	if (key == GLFW_KEY_HOME && action == GLFW_PRESS)
+		seek_pts(video_stream->start_time);
+
+	// RIGHT skips one frame while paused
+	else if (key == GLFW_KEY_RIGHT && action != GLFW_RELEASE && !playing)
+		seek_needs_display = true;		// this shows the next frame in queue, if any
+
+	// SPACE toggles pause
+	else if (key == GLFW_KEY_SPACE && action == GLFW_PRESS)
+		toggle_play(glfwGetTime());
 }
 
 void debug_message_callback(GLenum source, GLenum type, GLuint id, GLenum severity, GLsizei length, const GLchar* message, const void* userParam)
@@ -257,6 +307,7 @@ int gl_init()
 	window = glfwCreateWindow(800, 600, ApplicationName, nullptr, nullptr);
 	glfwGetFramebufferSize(window, &window_width, &window_height);
 	previous_framebuffer_size_callback = glfwSetFramebufferSizeCallback(window, framebuffer_size_callback);
+	previous_key_callback = glfwSetKeyCallback(window, key_callback);
 	CHECK_SUCCESS(window, "Could not create window.");
 	glfwMakeContextCurrent(window);
 
@@ -386,23 +437,15 @@ void gui_process(const double current_time_sec)
 	gui_slider(
 		box2::from_corner_size({ gui_left_button_width + gui_slider_margins_x, gui_play_bar_height / 2.f - gui_slider_height / 2.f }, { window_width - gui_time_position_width - gui_slider_margins_x - gui_left_button_width, gui_slider_height }), 0.0f,
 		static_cast<double>(video_stream->duration), static_cast<double>(last_frame_timestamp),
-		[&](double new_value) { seek_timestamp_sec = new_value * video_stream->duration * av_q2d(video_stream->time_base); });
+		[&](double new_value) { seek_pts(static_cast<int64_t>(new_value * video_stream->duration)); });
 
 	const auto slider_label = u8_seconds_to_time_string(last_frame_timestamp * av_q2d(video_stream->time_base)) + u8" / " +
 		u8_seconds_to_time_string(video_stream->duration * av_q2d(video_stream->time_base));
 	gui_label(box2::from_corner_size({ window_width - gui_time_position_width, 0 }, { gui_time_position_width, gui_play_bar_height }), slider_label, gui_font_scale);
 
 	// left buttons
-	gui_button(box2::from_corner_size({}, { gui_left_button_width, gui_play_bar_height }), playing ? u8"⬛" : u8"▶", [&]
-		{
-			if (playing = !playing)
-				next_frame_time_sec = next_frame_time_sec_remaining_paused + current_time_sec;
-			else
-			{
-				next_frame_time_sec_remaining_paused = next_frame_time_sec - current_time_sec;
-				next_frame_time_sec = current_time_sec + frame_time_sec_paused;
-			}
-		}, gui_font_scale);
+	gui_button(box2::from_corner_size({}, { gui_left_button_width, gui_play_bar_height }), playing ? u8"⬛" : u8"▶",
+		[&] { toggle_play(current_time_sec); }, gui_font_scale);
 
 	// render the selection box -- need to figure out the aspect corrected position of the main video player
 	static SelectionBoxState selection_box_state{};
@@ -426,7 +469,7 @@ bool gl_render()
 	const auto current_time_sec = glfwGetTime();
 	if (current_time_sec < next_frame_time_sec) return false;
 
-	if (playing)
+	if (playing || seek_needs_display)
 	{
 		// read the next video frame
 		AVFrame* frame;
@@ -460,6 +503,7 @@ bool gl_render()
 		// frame is processed
 		last_frame_timestamp = frame->best_effort_timestamp;
 		next_frame_time_sec += frame->pkt_duration * av_q2d(video_stream->time_base);
+		seek_needs_display = false;
 
 		av_frame_free(&frame);
 	}

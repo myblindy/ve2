@@ -19,6 +19,9 @@
     <Filter Include="Source Files\render\glyph_foundry">
       <UniqueIdentifier>{1c2ab962-ba13-4bea-8f21-2413321c0ed2}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Source Files\video">
+      <UniqueIdentifier>{99456c86-220f-4c82-ba98-f0ce41196fd2}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="framework.h">
@@ -81,7 +84,10 @@
       <Filter>Source Files\render</Filter>
     </ClCompile>
     <ClCompile Include="keyframes.ixx">
-      <Filter>Source Files</Filter>
+      <Filter>Source Files\video</Filter>
+    </ClCompile>
+    <ClCompile Include="video.ixx">
+      <Filter>Source Files\video</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>

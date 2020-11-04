@@ -5,31 +5,26 @@ module;
 #include <memory>
 #include <vector>
 
+export module growable_texture_atlas;
+
 import utilities;
 
 using namespace std;
 using namespace glm;
 
-export module growable_texture_atlas;
+struct details_t
+{
+	GLenum internal_storage, format, pixel_type;
+};
 
 export enum class GrowableTextureAtlasInternalStorageType
 {
 	OneChannel,
 };
 
-constexpr GLenum internal_storage_for_growable_texture_atlas_internal_storage_type[] =
+constexpr details_t details_for_growable_texture_atlas_internal_storage_type[] =
 {
-	GL_R8,
-};
-
-constexpr GLenum format_for_growable_texture_atlas_internal_storage_type[] =
-{
-	GL_RED,
-};
-
-constexpr GLenum pixel_type_for_growable_texture_atlas_internal_storage_type[] =
-{
-	GL_UNSIGNED_BYTE,
+	{ GL_R8, GL_RED, GL_UNSIGNED_BYTE},
 };
 
 export enum class GrowableTextureAtlasFilter
@@ -54,10 +49,10 @@ export struct GrowableTextureAtlas
 		: texture_size(initial_size)
 	{
 		glCreateTextures(GL_TEXTURE_2D, 1, &texture_name);
-		glTextureStorage2D(texture_name, 1, internal_storage_for_growable_texture_atlas_internal_storage_type[(int)storage_type],
+		glTextureStorage2D(texture_name, 1, details_for_growable_texture_atlas_internal_storage_type[(int)storage_type].internal_storage,
 			initial_size.x, initial_size.y);
-		texture_storage_format = format_for_growable_texture_atlas_internal_storage_type[(int)storage_type];
-		texture_storage_pixel_type = pixel_type_for_growable_texture_atlas_internal_storage_type[(int)storage_type];
+		texture_storage_format = details_for_growable_texture_atlas_internal_storage_type[(int)storage_type].format;
+		texture_storage_pixel_type = details_for_growable_texture_atlas_internal_storage_type[(int)storage_type].pixel_type;
 
 		glTextureParameteri(texture_name, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
 		glTextureParameteri(texture_name, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);

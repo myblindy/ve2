@@ -188,6 +188,7 @@
     <ClCompile Include="utilities.ixx" />
     <ClCompile Include="ve2.cpp" />
     <ClCompile Include="vertex_array.ixx" />
+    <ClCompile Include="video.ixx" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="ve2.rc" />
