@@ -21,13 +21,6 @@ extern "C"
 }
 #pragma comment(lib, "opengl32")
 
-
-extern "C"
-{
-#include <libavcodec/avcodec.h>
-#include <libavformat/avformat.h>
-}
-
 #define GLM_FORCE_SWIZZLE
 #include <glm/glm.hpp>
 #include <glm/gtc/type_ptr.hpp>

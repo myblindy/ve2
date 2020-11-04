@@ -6,6 +6,7 @@ import vertex_array;
 import gui;
 import utilities;
 import keyframes;
+import video;
 
 #include "framework.h"
 #include "sdf_font.h"
@@ -14,29 +15,17 @@ using namespace std;
 using namespace glm;
 
 #define CHECK_SUCCESS(cmd, errormsg) if(!(cmd)) { cerr << errormsg << "\n"; return -1; }
-char av_error_buffer[2048];
-#define CHECK_AV_SUCCESS(cmd) [[gsl::suppress(bounds.3)]] { const int __res = (cmd); if(__res < 0) { av_strerror(__res, av_error_buffer, sizeof(av_error_buffer)); cerr << av_error_buffer << "\n"; } }
 
 GLFWwindow* window;
 int window_width, window_height;
 GLFWframebuffersizefun previous_framebuffer_size_callback;
 GLFWkeyfun previous_key_callback;
 
-AVFormatContext* format_context{};
-AVFrame* input_frame;
-AVPacket* input_packet;
-AVStream* video_stream;
-AVCodecContext* codec_decoder_context;
+unique_ptr<Video> video;
 int64_t last_frame_timestamp{};
 constexpr double frame_time_sec_paused{ 1.0 / 30.0 };
 double frame_time_sec, next_frame_time_sec = 0, next_frame_time_sec_remaining_paused{};
 
-constexpr int frames_queue_max_length = 10;
-optional<double> seek_timestamp_sec{};					// if set, triggers the frame read thread to clear the frame cache, seek to this position and restart the decoding
-queue<AVFrame*> frames_queue;
-mutex frames_queue_mutex;
-condition_variable frames_queue_cv;
-bool playing = true, seek_needs_display = false;
 KeyFrames keyframes;
 
 // gui layout constants
@@ -47,146 +36,6 @@ constexpr float gui_font_scale = 0.2f;
 // gui boxes
 box2 active_selection_box{ {0, 0}, {1, 1} };
 bool active_selection_box_is_keyframe = false;
-
-int av_get_next_frame(const int64_t skip_pts, function<void(AVFrame* frame)> process_frame)
-{
-	while (av_read_frame(format_context, input_packet) >= 0)
-	{
-		if (input_packet->stream_index == video_stream->index)
-		{
-			// get the frame
-			CHECK_AV_SUCCESS(avcodec_send_packet(codec_decoder_context, input_packet));
-
-			int res{};
-			while (1)
-			{
-				res = avcodec_receive_frame(codec_decoder_context, input_frame);
-				if (res == AVERROR(EAGAIN) || res == AVERROR_EOF) break;
-				CHECK_AV_SUCCESS(res);
-
-				// skip frames as needed for seeking
-				if (input_frame->pts >= skip_pts)
-					process_frame(input_frame);
-
-				av_frame_unref(input_frame);
-
-				return 0;
-			}
-		}
-
-		av_packet_unref(input_packet);
-	}
-
-	return AVERROR_EOF;
-}
-
-AVFrame* av_deep_clone_frame(AVFrame* src)
-{
-	auto dst = av_frame_alloc();
-	dst->format = src->format;
-	dst->width = src->width;
-	dst->height = src->height;
-	dst->channels = src->channels;
-	dst->channel_layout = src->channel_layout;
-	dst->nb_samples = src->nb_samples;
-
-	av_frame_get_buffer(dst, 32);
-	av_frame_copy(dst, src);
-	av_frame_copy_props(dst, src);
-
-	return dst;
-}
-
-int av_open(const char* url)
-{
-	// read the file header
-	CHECK_AV_SUCCESS(avformat_open_input(&format_context, url, nullptr, nullptr));
-
-	// get the stream information
-	CHECK_AV_SUCCESS(avformat_find_stream_info(format_context, nullptr));
-
-	// find the first video stream
-	for (const auto current_video_stream : span<AVStream*>(format_context->streams, format_context->nb_streams))
-		if (current_video_stream->codecpar->codec_type == AVMEDIA_TYPE_VIDEO)
-		{
-			video_stream = current_video_stream;
-			break;
-		}
-	CHECK_SUCCESS(video_stream, "Could not find a video stream.");
-
-	// dump information about it
-	av_dump_format(format_context, video_stream->index, url, false);
-
-	// find the decoder
-	AVCodec const* codec_decoder = avcodec_find_decoder(video_stream->codecpar->codec_id);
-	CHECK_SUCCESS(codec_decoder, "Could not find decoder codec.");
-
-	// copy the decoder codec context locally, since we must not use the the global version
-	codec_decoder_context = avcodec_alloc_context3(codec_decoder);
-	CHECK_AV_SUCCESS(avcodec_parameters_to_context(codec_decoder_context, video_stream->codecpar));
-
-	// multi-threaded decoder, use 4 threads
-	codec_decoder_context->thread_count = 4;
-	codec_decoder_context->thread_type = FF_THREAD_FRAME;
-
-	// open the codec
-	avcodec_open2(codec_decoder_context, codec_decoder, nullptr);
-
-	input_frame = av_frame_alloc();
-	input_packet = av_packet_alloc();
-
-	const auto frame_rate_rational = av_guess_frame_rate(format_context, video_stream, nullptr);
-	frame_time_sec = static_cast<double>(frame_rate_rational.den) / frame_rate_rational.num;
-
-	thread([&]
-		{
-			while (true)
-			{
-				optional<double> _seek_timestamp_sec;
-				int64_t ts_pts = INT64_MIN;
-				{
-					lock_guard<mutex> lg(frames_queue_mutex);
-					_seek_timestamp_sec = seek_timestamp_sec;
-				}
-				seek_timestamp_sec.reset();
-
-				// seek if needed
-				if (_seek_timestamp_sec)
-				{
-					// convert seconds to pts
-					ts_pts = static_cast<int64_t>(*_seek_timestamp_sec / av_q2d(video_stream->time_base));
-
-					// seek before the time stamp 
-					avformat_seek_file(format_context, video_stream->index, INT64_MIN, ts_pts, ts_pts, AVSEEK_FLAG_BACKWARD);
-
-					// flush the context
-					avcodec_flush_buffers(codec_decoder_context);
-				}
-
-				while (av_get_next_frame(ts_pts, [&](AVFrame* frame)
-					{
-						auto new_frame = av_deep_clone_frame(frame);
-
-						// queue the frame
-						unique_lock<mutex> lock(frames_queue_mutex);
-						frames_queue_cv.wait(lock, [] { return seek_timestamp_sec || frames_queue.size() < frames_queue_max_length; });
-
-						// seek instead if required
-						if (seek_timestamp_sec)
-						{
-							av_frame_unref(new_frame);
-							return;
-						}
-
-						frames_queue.push(new_frame);
-					}) != AVERROR_EOF && !seek_timestamp_sec)
-				{
-				}
-			}
-		}).detach();
-
-		return 0;
-}
 
 #pragma pack(push, 1)
 struct Vertex
@@ -222,43 +71,23 @@ unique_ptr<UniformBufferObject<VideoBufferObject>> full_video_buffer_object, pre
 
 void update_screen_layout()
 {
+	const auto frame_size = video->frame_size();
+
 	// split the screen horizontally
 	const auto height = (window_height - gui_play_bar_height) / 2;
 	full_video_buffer_object->data.pixel_bounds_box = box2::from_corner_size({ 0, gui_play_bar_height }, { window_width, height });
-	full_video_buffer_object->data.window_and_video_pixel_size = { window_width, window_height, video_stream->codecpar->width, video_stream->codecpar->height };
+	full_video_buffer_object->data.window_and_video_pixel_size = { window_width, window_height, frame_size.x, frame_size.y };
 	full_video_buffer_object->update();
 	preview_video_buffer_object->data.pixel_bounds_box = box2::from_corner_size({ 0, height + gui_play_bar_height }, { window_width, height });
-	preview_video_buffer_object->data.window_and_video_pixel_size = { window_width, window_height, video_stream->codecpar->width, video_stream->codecpar->height };
+	preview_video_buffer_object->data.window_and_video_pixel_size = { window_width, window_height, frame_size.x, frame_size.y };
 	preview_video_buffer_object->update();
-}
-
-// needs to be under a frames_queue_mutex lock
-void clear_frames_queue()
-{
-	// clear the queue and free up the allocated frames
-	while (!frames_queue.empty())
-	{
-		av_frame_unref(frames_queue.front());
-		frames_queue.pop();
-	}
-
-	// notify the decoder thread that we need more frames to replace what we just cleared
-	frames_queue_cv.notify_all();
-}
-
-void seek_pts(int64_t pts)
-{
-	seek_timestamp_sec = pts * av_q2d(video_stream->time_base);
-	{
-		lock_guard<mutex> lock(frames_queue_mutex);
-		clear_frames_queue();
-	}
-	seek_needs_display = true;
 }
 
 void toggle_play(double current_time_sec)
 {
-	if (playing = !playing)
+	video->play(!video->playing());
+
+	if (video->playing())
 		next_frame_time_sec = next_frame_time_sec_remaining_paused + current_time_sec; // now playing
 	else
 	{
@@ -278,11 +107,11 @@ void key_callback(GLFWwindow* window, int key, int scancode, int action, int mod
 {
 	// HOME seeks at the beginning
 	if (key == GLFW_KEY_HOME && action == GLFW_PRESS)
-		seek_pts(video_stream->start_time);
+		video->seek_pts(video->start_pts());
 
 	// RIGHT skips one frame while paused
-	else if (key == GLFW_KEY_RIGHT && action != GLFW_RELEASE && !playing)
-		seek_needs_display = true;		// this shows the next frame in queue, if any
+	else if (key == GLFW_KEY_RIGHT && action != GLFW_RELEASE && !video->playing())
+		video->set_force_display();									// this shows the next frame in queue, if any
 
 	// SPACE toggles pause
 	else if (key == GLFW_KEY_SPACE && action == GLFW_PRESS)
@@ -324,9 +153,9 @@ int gl_init()
 	preview_video_buffer_object = UniformBufferObject<VideoBufferObject>::create();
 
 	// shaders
-	string yuv_rgb_color_transform_matrix = codec_decoder_context->colorspace != AVCOL_SPC_BT709
-		? "1, 1, 1, 0, -0.39465, 2.03211, 1.13983, -0.58060, 0"
-		: "1, 1, 1, 0, -0.21482, 2.12798, 1.28033, -0.38059, 0";
+	string yuv_rgb_color_transform_matrix = video->colorspace_is_bt709()
+		? "1, 1, 1, 0, -0.21482, 2.12798, 1.28033, -0.38059, 0"
+		: "1, 1, 1, 0, -0.39465, 2.03211, 1.13983, -0.58060, 0";
 	shader_program = link_shader_program_from_shader_objects(
 		{
 			compile_shader_from_source("\
@@ -385,6 +214,7 @@ int gl_init()
 	// video textures (3 yuv planar textures)
 	glCreateTextures(GL_TEXTURE_2D, yuv_planar_textures_count, yuv_planar_texture_names);
 	int yuv_planar_texture_name_index = 0;
+	const auto frame_size = video->frame_size();
 	for (auto yuv_planar_texture_name = yuv_planar_texture_names; yuv_planar_texture_name < yuv_planar_texture_names + yuv_planar_textures_count; ++yuv_planar_texture_name, ++yuv_planar_texture_name_index)
 	{
 		glTextureParameteri(*yuv_planar_texture_name, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
@@ -392,7 +222,7 @@ int gl_init()
 		glTextureParameteri(*yuv_planar_texture_name, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
 		glTextureParameteri(*yuv_planar_texture_name, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 		glTextureStorage2D(*yuv_planar_texture_name, 1, GL_R8,
-			video_stream->codecpar->width / (yuv_planar_texture_name_index ? 2 : 1), video_stream->codecpar->height / (yuv_planar_texture_name_index ? 2 : 1));
+			frame_size.x / (yuv_planar_texture_name_index ? 2 : 1), frame_size.y / (yuv_planar_texture_name_index ? 2 : 1));
 	}
 
 	glProgramUniform1i(shader_program->program_name, shader_program->uniform_locations["y_texture"], 0);
@@ -436,24 +266,24 @@ void gui_process(const double current_time_sec)
 	// render the position slider and its label
 	gui_slider(
 		box2::from_corner_size({ gui_left_button_width + gui_slider_margins_x, gui_play_bar_height / 2.f - gui_slider_height / 2.f }, { window_width - gui_time_position_width - gui_slider_margins_x - gui_left_button_width, gui_slider_height }), 0.0f,
-		static_cast<double>(video_stream->duration), static_cast<double>(last_frame_timestamp),
-		[&](double new_value) { seek_pts(static_cast<int64_t>(new_value * video_stream->duration)); });
+		static_cast<double>(video->duration_pts()), static_cast<double>(last_frame_timestamp),
+		[&](double new_value) { video->seek_pts(static_cast<int64_t>(new_value * video->duration_pts())); });
 
-	const auto slider_label = u8_seconds_to_time_string(last_frame_timestamp * av_q2d(video_stream->time_base)) + u8" / " +
-		u8_seconds_to_time_string(video_stream->duration * av_q2d(video_stream->time_base));
+	const auto slider_label = u8_seconds_to_time_string(last_frame_timestamp * video->time_base()) + u8" / " +
+		u8_seconds_to_time_string(video->duration_sec());
 	gui_label(box2::from_corner_size({ window_width - gui_time_position_width, 0 }, { gui_time_position_width, gui_play_bar_height }), slider_label, gui_font_scale);
 
 	// left buttons
-	gui_button(box2::from_corner_size({}, { gui_left_button_width, gui_play_bar_height }), playing ? u8"⬛" : u8"▶",
+	gui_button(box2::from_corner_size({}, { gui_left_button_width, gui_play_bar_height }), video->playing() ? u8"⬛" : u8"▶",
 		[&] { toggle_play(current_time_sec); }, gui_font_scale);
 
 	// render the selection box -- need to figure out the aspect corrected position of the main video player
 	static SelectionBoxState selection_box_state{};
-	gui_selection_box(active_selection_box, get_aspect_corrected_video_pixel_bounds_box(), playing,
+	gui_selection_box(active_selection_box, get_aspect_corrected_video_pixel_bounds_box(), video->playing(),
 		active_selection_box_is_keyframe ? vec4(1, 0, 1, 1) : vec4(1, 1, 1, 1), keyframes.aspect_ratio(),
 		[]
 		{
-			keyframes.add(last_frame_timestamp * av_q2d(video_stream->time_base), active_selection_box);
+			keyframes.add(last_frame_timestamp * video->time_base(), active_selection_box);
 			active_selection_box_is_keyframe = true;
 		}, selection_box_state);
 
@@ -469,7 +299,7 @@ bool gl_render()
 	const auto current_time_sec = glfwGetTime();
 	if (current_time_sec < next_frame_time_sec) return false;
 
-	if (playing || seek_needs_display)
+	if (video->playing() || video->force_display())
 	{
 		// read the next video frame
 		AVFrame* frame;
@@ -538,7 +368,7 @@ int main(int argc, const char* argv[])
 	keyframes.add(0, { {.2f, .3f}, {.5f, .4f} });
 	keyframes.add(10, { {.3f, .5f}, {.6f, .6f} });
 
-	if (av_open(argv[1])) return -1;
+	video = make_unique<Video>(argv[1]);
 
 	if (gl_init()) return -1;
 	next_frame_time_sec = glfwGetTime() + frame_time_sec;
