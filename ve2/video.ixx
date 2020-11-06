@@ -181,7 +181,7 @@ public:
 			}).detach();
 	}
 
-	bool playing() { return video_impl->playing; }
+	bool playing() const { return video_impl->playing; }
 	void play(bool enabled) { video_impl->playing = enabled; }
 
 	void seek_pts(int64_t pts)
@@ -208,7 +208,7 @@ public:
 		video_impl->frames_queue_cv.notify_all();
 	}
 
-	bool consume_frame(function<void(int64_t, span<uint8_t>[3])> process)
+	bool consume_frame(function<void(int64_t, int64_t, span<uint8_t>[3])> process)
 	{
 		AVFrame* frame;
 		{
@@ -224,7 +224,7 @@ public:
 				{ frame->data[1], frame->data[1] + frame->linesize[1] },
 				{ frame->data[2], frame->data[2] + frame->linesize[2] }
 			};
-			process(frame->best_effort_timestamp, planes);
+			process(frame->best_effort_timestamp, frame->pkt_duration, planes);
 
 			video_impl->seek_needs_display = false;
 			av_frame_free(&frame);
@@ -237,15 +237,16 @@ public:
 		return true;
 	}
 
-	ivec2 frame_size() { return { video_impl->video_stream->codecpar->width, video_impl->video_stream->codecpar->height }; }
+	ivec2 frame_size() const { return { video_impl->video_stream->codecpar->width, video_impl->video_stream->codecpar->height }; }
 
-	double time_base() { return av_q2d(video_impl->video_stream->time_base); }
-	int64_t start_pts() { return video_impl->video_stream->start_time; }
-	int64_t duration_pts() { return video_impl->video_stream->duration; }
-	double duration_sec() { return duration_pts() * time_base(); }
+	double time_base() const { return av_q2d(video_impl->video_stream->time_base); }
+	int64_t start_pts() const { return video_impl->video_stream->start_time; }
+	int64_t duration_pts() const { return video_impl->video_stream->duration; }
+	double duration_sec() const { return duration_pts() * time_base(); }
 
-	bool force_display() { return video_impl->seek_needs_display; }
+	bool force_display() const { return video_impl->seek_needs_display; }
 	void set_force_display() { video_impl->seek_needs_display = true; }
+	void clear_force_display() { video_impl->seek_needs_display = false; }
 
-	bool colorspace_is_bt709() { return video_impl->codec_decoder_context->colorspace == AVCOL_SPC_BT709; }
+	bool colorspace_is_bt709() const { return video_impl->codec_decoder_context->colorspace == AVCOL_SPC_BT709; }
 };

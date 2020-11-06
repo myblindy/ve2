@@ -301,41 +301,30 @@ bool gl_render()
 
 	if (video->playing() || video->force_display())
 	{
-		// read the next video frame
-		AVFrame* frame;
-		{
-			lock_guard<mutex> lock(frames_queue_mutex);
-			if (frames_queue.empty())
+		const auto underflow = !video->consume_frame([&](int64_t pts, int64_t frame_duration_pts, span<uint8_t> planes[3])
 			{
-				had_underflow = true;
-				return false;					// no data, buffer underflow
-			}
+				const auto frame_size = video->frame_size();
 
-			frame = frames_queue.front();
-			frames_queue.pop();
+				// upload the data
+				glPixelStorei(GL_UNPACK_ROW_LENGTH, planes[0].size_bytes());
+				glTextureSubImage2D(yuv_planar_texture_names[0], 0, 0, 0, frame_size.x, frame_size.y, GL_RED, GL_UNSIGNED_BYTE, planes[0].data());
+				glPixelStorei(GL_UNPACK_ROW_LENGTH, planes[1].size_bytes());
+				glTextureSubImage2D(yuv_planar_texture_names[1], 0, 0, 0, frame_size.x / 2, frame_size.y / 2, GL_RED, GL_UNSIGNED_BYTE, planes[1].data());
+				glPixelStorei(GL_UNPACK_ROW_LENGTH, planes[2].size_bytes());
+				glTextureSubImage2D(yuv_planar_texture_names[2], 0, 0, 0, frame_size.x / 2, frame_size.y / 2, GL_RED, GL_UNSIGNED_BYTE, planes[2].data());
 
-			const auto ts = frame->best_effort_timestamp * av_q2d(video_stream->time_base);
-			active_selection_box = keyframes.at(ts);
-			active_selection_box_is_keyframe = keyframes.contains(ts);
-		}
+				const auto ts = pts * video->time_base();
+				active_selection_box = keyframes.at(ts);
+				active_selection_box_is_keyframe = keyframes.contains(ts);
 
-		// notify the decoder thread that we consumed a frame
-		frames_queue_cv.notify_all();
+				// frame is processed
+				last_frame_timestamp = pts;
+				next_frame_time_sec += frame_duration_pts * video->time_base();
+				video->clear_force_display();
+			});
 
-		// upload the data
-		glPixelStorei(GL_UNPACK_ROW_LENGTH, frame->linesize[0]);
-		glTextureSubImage2D(yuv_planar_texture_names[0], 0, 0, 0, video_stream->codecpar->width, video_stream->codecpar->height, GL_RED, GL_UNSIGNED_BYTE, frame->data[0]);
-		glPixelStorei(GL_UNPACK_ROW_LENGTH, frame->linesize[1]);
-		glTextureSubImage2D(yuv_planar_texture_names[1], 0, 0, 0, video_stream->codecpar->width / 2, video_stream->codecpar->height / 2, GL_RED, GL_UNSIGNED_BYTE, frame->data[1]);
-		glPixelStorei(GL_UNPACK_ROW_LENGTH, frame->linesize[2]);
-		glTextureSubImage2D(yuv_planar_texture_names[2], 0, 0, 0, video_stream->codecpar->width / 2, video_stream->codecpar->height / 2, GL_RED, GL_UNSIGNED_BYTE, frame->data[2]);
-
-		// frame is processed
-		last_frame_timestamp = frame->best_effort_timestamp;
-		next_frame_time_sec += frame->pkt_duration * av_q2d(video_stream->time_base);
-		seek_needs_display = false;
-
-		av_frame_free(&frame);
+		if (underflow)
+			return false;
 	}
 
 	glClear(GL_COLOR_BUFFER_BIT);
