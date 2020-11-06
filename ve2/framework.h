@@ -13,6 +13,7 @@
 #include <vector>
 #include <mutex>
 #include <string>
+#include <array>
 
 extern "C"
 {

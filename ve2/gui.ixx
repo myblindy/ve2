@@ -6,10 +6,15 @@ module;
 #include <algorithm>
 #include <functional>
 #include <variant>
+#include "sdf_font.h"
+
+#include <CppCoreCheck\Warnings.h>
+#pragma warning(push)
+#pragma warning(disable : ALL_CPPCORECHECK_WARNINGS)
 #include <glm/glm.hpp>
 #include <gl/glew.h>
 #include <glfw/glfw3.h>
-#include "sdf_font.h"
+#pragma warning(pop)
 
 export module gui;
 
@@ -20,8 +25,11 @@ import utilities;
 using namespace std;
 using namespace glm;
 
+#pragma warning(push)
+#pragma warning(disable : ALL_CPPCORECHECK_WARNINGS)
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
+#pragma warning(pop)
 
 namespace gui_priv
 {

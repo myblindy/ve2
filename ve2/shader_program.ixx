@@ -40,12 +40,12 @@ struct UniformBufferObject
 		return unique_ptr<UniformBufferObject<T>>(p);
 	}
 
-	void bind(GLuint binding_point)
+	void bind(GLuint binding_point) noexcept
 	{
 		glBindBufferBase(GL_UNIFORM_BUFFER, binding_point, object_name);
 	}
 
-	void update()
+	void update() noexcept
 	{
 		glNamedBufferSubData(object_name, 0, sizeof(T), &data);
 	}

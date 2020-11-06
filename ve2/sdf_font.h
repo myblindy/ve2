@@ -1,8 +1,13 @@
 #pragma once
 
+#include <CppCoreCheck\Warnings.h>
+#pragma warning(push)
+#pragma warning(disable : ALL_CPPCORECHECK_WARNINGS)
 #include "mapbox/glyph_foundry.hpp"
 #include <glm/glm.hpp>
 #include <gl/glew.h>
+#pragma warning(pop)
+
 #include <memory>
 #include <vector>
 #include <string>
@@ -24,7 +29,7 @@ struct Font
 {
 	Font(const std::vector<const char*> &font_face_paths, int render_size = 512, int sdf_size = 32);
 	std::vector<FontGlyph> get_glyph_data(const std::u8string& s);
-	void bind() const { glBindTexture(GL_TEXTURE_2D, atlas->texture_name); }
+	void bind() const noexcept { glBindTexture(GL_TEXTURE_2D, atlas->texture_name); }
 
 private:
 	int sdf_size;

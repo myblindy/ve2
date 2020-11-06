@@ -60,6 +60,9 @@
     <ClInclude Include="sdf_font.h">
       <Filter>Source Files\render</Filter>
     </ClInclude>
+    <ClInclude Include="libav.h">
+      <Filter>Source Files\video</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="ve2.cpp">

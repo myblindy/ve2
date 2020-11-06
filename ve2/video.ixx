@@ -1,11 +1,6 @@
 module;
 
-extern "C"
-{
-	#include <libavcodec/avcodec.h>
-	#include <libavformat/avformat.h>
-}
-
+#include "libav.h"
 #include <glm/glm.hpp>
 #include <memory>
 #include <functional>
@@ -212,7 +207,7 @@ public:
 		video_impl->frames_queue_cv.notify_all();
 	}
 
-	bool consume_frame(function<void(int64_t, int64_t, span<uint8_t>[3])> process)
+	bool consume_frame(function<void(int64_t, int64_t, array<span<uint8_t>, 3>)> process)
 	{
 		AVFrame* frame;
 		{
@@ -222,12 +217,12 @@ public:
 
 			frame = video_impl->frames_queue.front();
 
-			span<uint8_t> planes[] =
-			{
+			array<span<uint8_t>, 3> planes =
+			{ {
 				{ frame->data[0], frame->data[0] + frame->linesize[0] },
 				{ frame->data[1], frame->data[1] + frame->linesize[1] },
 				{ frame->data[2], frame->data[2] + frame->linesize[2] }
-			};
+			} };
 			process(frame->best_effort_timestamp, frame->pkt_duration, planes);
 
 			video_impl->seek_needs_display = false;

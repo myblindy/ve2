@@ -42,7 +42,7 @@ struct Vertex
 {
 	vec2 position, uv;
 
-	static void setup_gl_array_attributes(GLuint vertex_array_object_name)
+	static void setup_gl_array_attributes(GLuint vertex_array_object_name) noexcept
 	{
 		glEnableVertexArrayAttrib(vertex_array_object_name, 0);
 		glVertexArrayAttribFormat(vertex_array_object_name, 0, 2, GL_FLOAT, false, offsetof(Vertex, position));
@@ -301,16 +301,16 @@ bool gl_render()
 
 	if (video->playing() || video->force_display())
 	{
-		const auto underflow = !video->consume_frame([&](int64_t pts, int64_t frame_duration_pts, span<uint8_t> planes[3])
+		const auto underflow = !video->consume_frame([&](int64_t pts, int64_t frame_duration_pts, array<span<uint8_t>, 3> planes)
 			{
 				const auto frame_size = video->frame_size();
 
 				// upload the data
-				glPixelStorei(GL_UNPACK_ROW_LENGTH, (GLint)planes[0].size_bytes());
+				glPixelStorei(GL_UNPACK_ROW_LENGTH, static_cast<GLint>(planes[0].size_bytes()));
 				glTextureSubImage2D(yuv_planar_texture_names[0], 0, 0, 0, frame_size.x, frame_size.y, GL_RED, GL_UNSIGNED_BYTE, planes[0].data());
-				glPixelStorei(GL_UNPACK_ROW_LENGTH, (GLint)planes[1].size_bytes());
+				glPixelStorei(GL_UNPACK_ROW_LENGTH, static_cast<GLint>(planes[1].size_bytes()));
 				glTextureSubImage2D(yuv_planar_texture_names[1], 0, 0, 0, frame_size.x / 2, frame_size.y / 2, GL_RED, GL_UNSIGNED_BYTE, planes[1].data());
-				glPixelStorei(GL_UNPACK_ROW_LENGTH, (GLint)planes[2].size_bytes());
+				glPixelStorei(GL_UNPACK_ROW_LENGTH, static_cast<GLint>(planes[2].size_bytes()));
 				glTextureSubImage2D(yuv_planar_texture_names[2], 0, 0, 0, frame_size.x / 2, frame_size.y / 2, GL_RED, GL_UNSIGNED_BYTE, planes[2].data());
 
 				const auto ts = pts * video->time_base();
