@@ -11,14 +11,14 @@ module;
 #include <glfw/glfw3.h>
 #include "sdf_font.h"
 
+export module gui;
+
 import shader_program;
 import vertex_array;
 import utilities;
 
 using namespace std;
 using namespace glm;
-
-export module gui;
 
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"

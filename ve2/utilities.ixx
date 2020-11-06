@@ -3,10 +3,10 @@ module;
 #include <memory>
 #include <string>
 
+export module utilities;
+
 using namespace std;
 using namespace glm;
-
-export module utilities;
 
 export unique_ptr<char[]> mem_new_dup(const char* data, const size_t length)
 {

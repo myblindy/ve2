@@ -4,12 +4,12 @@ module;
 #include <algorithm>
 #include <optional>
 
+export module keyframes;
+
 import utilities;
 
 using namespace std;
 using namespace glm;
-
-export module keyframes;
 
 export struct KeyFrame
 {
@@ -38,7 +38,7 @@ export struct KeyFrames
 				if (last_box_frame_time == frame_time)
 					return *last_box;
 				else
-					return mix(*last_box, keyframe.box, static_cast<float>(frame_time - last_box_frame_time) / (keyframe.frame_time - last_box_frame_time));
+					return mix(*last_box, keyframe.box, static_cast<float>((frame_time - last_box_frame_time) / (keyframe.frame_time - last_box_frame_time)));
 
 			last_box = &keyframe.box;
 			last_box_frame_time = keyframe.frame_time;
