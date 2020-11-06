@@ -9,9 +9,9 @@
 #include <initializer_list>
 #include <memory>
 
-using namespace std;
-
 export module shader_program;
+
+using namespace std;
 
 export template<typename T>
 struct UniformBufferObject

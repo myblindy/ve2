@@ -306,11 +306,11 @@ bool gl_render()
 				const auto frame_size = video->frame_size();
 
 				// upload the data
-				glPixelStorei(GL_UNPACK_ROW_LENGTH, planes[0].size_bytes());
+				glPixelStorei(GL_UNPACK_ROW_LENGTH, (GLint)planes[0].size_bytes());
 				glTextureSubImage2D(yuv_planar_texture_names[0], 0, 0, 0, frame_size.x, frame_size.y, GL_RED, GL_UNSIGNED_BYTE, planes[0].data());
-				glPixelStorei(GL_UNPACK_ROW_LENGTH, planes[1].size_bytes());
+				glPixelStorei(GL_UNPACK_ROW_LENGTH, (GLint)planes[1].size_bytes());
 				glTextureSubImage2D(yuv_planar_texture_names[1], 0, 0, 0, frame_size.x / 2, frame_size.y / 2, GL_RED, GL_UNSIGNED_BYTE, planes[1].data());
-				glPixelStorei(GL_UNPACK_ROW_LENGTH, planes[2].size_bytes());
+				glPixelStorei(GL_UNPACK_ROW_LENGTH, (GLint)planes[2].size_bytes());
 				glTextureSubImage2D(yuv_planar_texture_names[2], 0, 0, 0, frame_size.x / 2, frame_size.y / 2, GL_RED, GL_UNSIGNED_BYTE, planes[2].data());
 
 				const auto ts = pts * video->time_base();

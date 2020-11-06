@@ -1,8 +1,12 @@
 module;
 
+extern "C"
+{
+	#include <libavcodec/avcodec.h>
+	#include <libavformat/avformat.h>
+}
+
 #include <glm/glm.hpp>
-#include <libavcodec/avcodec.h>
-#include <libavformat/avformat.h>
 #include <memory>
 #include <functional>
 #include <string>
@@ -36,7 +40,7 @@ struct VideoImpl
 	queue<AVFrame*> frames_queue;
 	mutex frames_queue_mutex;
 	condition_variable frames_queue_cv;
-	bool playing = false, seek_needs_display = false;
+	bool playing = false, seek_needs_display = true;
 
 	optional<double> seek_timestamp_sec{};					// if set, triggers the frame read thread to clear the frame cache, seek to this position and restart the decoding
 };
