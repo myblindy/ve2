@@ -38,6 +38,17 @@ struct node
 	box2 uv_box;
 };
 
+struct GrowableTextureAtlasImpl
+{
+	GLenum texture_storage_format, texture_storage_pixel_type;
+	ivec2 texture_size;
+
+	vector<node> nodes;
+
+	ivec2 current_position{ 0, 0 };
+	int current_max_height{};
+};
+
 export struct GrowableTextureAtlas
 {
 	GLuint texture_name;
@@ -46,13 +57,14 @@ export struct GrowableTextureAtlas
 		const GrowableTextureAtlasInternalStorageType storage_type = GrowableTextureAtlasInternalStorageType::OneChannel,
 		const GrowableTextureAtlasFilter min_filter = GrowableTextureAtlasFilter::Linear,
 		const GrowableTextureAtlasFilter mag_filter = GrowableTextureAtlasFilter::Linear)
-		: texture_size(initial_size)
 	{
+		impl->texture_size = initial_size;
+
 		glCreateTextures(GL_TEXTURE_2D, 1, &texture_name);
 		glTextureStorage2D(texture_name, 1, details_for_growable_texture_atlas_internal_storage_type[(int)storage_type].internal_storage,
 			initial_size.x, initial_size.y);
-		texture_storage_format = details_for_growable_texture_atlas_internal_storage_type[(int)storage_type].format;
-		texture_storage_pixel_type = details_for_growable_texture_atlas_internal_storage_type[(int)storage_type].pixel_type;
+		impl->texture_storage_format = details_for_growable_texture_atlas_internal_storage_type[(int)storage_type].format;
+		impl->texture_storage_pixel_type = details_for_growable_texture_atlas_internal_storage_type[(int)storage_type].pixel_type;
 
 		glTextureParameteri(texture_name, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
 		glTextureParameteri(texture_name, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
@@ -62,14 +74,14 @@ export struct GrowableTextureAtlas
 
 	size_t add(const ivec2& size, const char* data)
 	{
-		if (current_position.x + size.x > texture_size.x)
+		if (impl->current_position.x + size.x > impl->texture_size.x)
 		{
 			// move to the next line
-			current_position = { 0, current_position.y + current_max_height };
-			current_max_height = 0;
+			impl->current_position = { 0, impl->current_position.y + impl->current_max_height };
+			impl->current_max_height = 0;
 		}
 
-		if (current_position.y + size.y > texture_size.y)
+		if (impl->current_position.y + size.y > impl->texture_size.y)
 		{
 			// allocate a new page and move to it (NYI)
 			throw exception();
@@ -80,31 +92,25 @@ export struct GrowableTextureAtlas
 		{
 			glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
 			glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
-			glTextureSubImage2D(texture_name, 0, current_position.x, current_position.y, size.x, size.y,
-				texture_storage_format, texture_storage_pixel_type, data);
+			glTextureSubImage2D(texture_name, 0, impl->current_position.x, impl->current_position.y, size.x, size.y,
+				impl->texture_storage_format, impl->texture_storage_pixel_type, data);
 		}
 
-		nodes.emplace_back(box2
+		impl->nodes.emplace_back(box2
 			{
-				vec2((float)current_position.x / texture_size.x, (float)current_position.y / texture_size.y),
-				vec2((float)(current_position.x + size.x) / texture_size.x, (float)(current_position.y + size.y) / texture_size.y)
+				vec2((float)impl->current_position.x / impl->texture_size.x, (float)impl->current_position.y / impl->texture_size.y),
+				vec2((float)(impl->current_position.x + size.x) / impl->texture_size.x, (float)(impl->current_position.y + size.y) / impl->texture_size.y)
 			});
 
 		// advance
-		current_position.x += size.x;
-		if (current_max_height < size.y) current_max_height = size.y;
+		impl->current_position.x += size.x;
+		if (impl->current_max_height < size.y) impl->current_max_height = size.y;
 
-		return nodes.size() - 1;
+		return impl->nodes.size() - 1;
 	}
 
-	const box2& get_uv(size_t index) const { return nodes[index].uv_box; }
+	const box2& get_uv(size_t index) const { return impl->nodes[index].uv_box; }
 
 private:
-	GLenum texture_storage_format, texture_storage_pixel_type;
-	ivec2 texture_size;
-
-	vector<node> nodes;
-
-	ivec2 current_position{ 0, 0 };
-	int current_max_height{};
+	unique_ptr<GrowableTextureAtlasImpl> impl{ make_unique<GrowableTextureAtlasImpl>() };
 };
