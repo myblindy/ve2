@@ -47,16 +47,18 @@ export struct KeyFrames
 		return *last_box;
 	}
 
-	optional<float> aspect_ratio()
+	optional<float> aspect_ratio() const
 	{
 		if (keyframes.empty()) return {};
 		const auto& first_box_size = keyframes[0].box.size();
 		return first_box_size.x / first_box_size.y;
 	}
 
-	bool contains(double frame_time) { return find_if(keyframes.begin(), keyframes.end(), [&](const auto& kf) {return kf.frame_time == frame_time; }) != keyframes.end(); }
+	bool contains(const double frame_time) const { return find_if(keyframes.begin(), keyframes.end(), [&](const auto& kf) {return kf.frame_time == frame_time; }) != keyframes.end(); }
 
-	bool add(double frame_time, const box2& box)
+	bool is_first(const double frame_time) const { return !keyframes.empty() && keyframes[0].frame_time == frame_time; }
+
+	bool add(const double frame_time, const box2& box)
 	{
 		const auto next_it = find_if(keyframes.begin(), keyframes.end(), [&](const auto& kf) {return kf.frame_time >= frame_time; });
 
@@ -82,7 +84,7 @@ export struct KeyFrames
 		return true;
 	}
 
-	void remove(double frame_time)
+	void remove(const double frame_time)
 	{
 		keyframes.erase(remove_if(keyframes.begin(), keyframes.end(), [&](const auto& kf) { return kf.frame_time == frame_time; }));
 	}

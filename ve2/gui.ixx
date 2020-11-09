@@ -93,6 +93,7 @@ export struct SelectionBoxState
 	vec2 last_mouse_position;
 	box2* normalized_box;
 	box2 full_pixel_box;
+	optional<float> aspect_ratio;
 	function<void()> changed;
 };
 
@@ -155,17 +156,22 @@ void cursor_pos_callback(GLFWwindow* window, double x, double y)
 
 			switch (state.side)
 			{
-#define PROCESS_SIDE(_side, _move_func, _field) \
+#define PROCESS_SIDE(_side, _move_func, _ar_func, _field) \
 			case SelectionBoxStateSide::_side: \
 				state.normalized_box->_move_func(pixel_delta._field / state.full_pixel_box.size()._field); \
 				state.normalized_box->clamp(0, 0, 1, 1);\
+				if(state.aspect_ratio)\
+				{\
+					state.normalized_box->_ar_func(*state.aspect_ratio);\
+					state.normalized_box->clamp_slide(0, 0, 1, 1);\
+				}\
 				state.changed();\
 				break
 
-				PROCESS_SIDE(Up, move_top, y);
-				PROCESS_SIDE(Down, move_bottom, y);
-				PROCESS_SIDE(Left, move_left, x);
-				PROCESS_SIDE(Right, move_right, x);
+				PROCESS_SIDE(Up, move_top, force_aspect_ratio_right, y);
+				PROCESS_SIDE(Down, move_bottom, force_aspect_ratio_right, y);
+				PROCESS_SIDE(Left, move_left, force_aspect_ratio_bottom, x);
+				PROCESS_SIDE(Right, move_right, force_aspect_ratio_bottom, x);
 
 			case SelectionBoxStateSide::All:
 				state.normalized_box->move(pixel_delta / state.full_pixel_box.size());
@@ -359,10 +365,10 @@ export int gui_slider(const box2& box, const double min, const double max, const
 	const vec2 thumb_position = { (box_size.x - box_size.y) * percentage + box.v0.x, box.v0.y };
 	const vec2 thumb_size = { box_size.y, box_size.y };
 	const box2 thumb_box = box2::from_corner_size(thumb_position, thumb_size);
-	quad(thumb_box, uv_no_texture, is_vec2_inside_box2(mouse_position, thumb_box) ? color_button_face_highlight : color_button_face);
+	quad(thumb_box, uv_no_texture, thumb_box.contains(mouse_position) ? color_button_face_highlight : color_button_face);
 
 	// handle a click
-	if (is_vec2_inside_box2(mouse_position, box) && left_mouse && !gui_state.selected_object && !gui_state.left_mouse_handled)
+	if (box.contains(mouse_position) && left_mouse && !gui_state.selected_object && !gui_state.left_mouse_handled)
 	{
 		clicked((mouse_position.x - box.v0.x) / (box.v1.x - box.v0.x));
 		gui_state.left_mouse_handled = true;
@@ -405,7 +411,7 @@ export int gui_label(const box2& box, const u8string& s, const float scale = 1.f
 
 export int gui_button(const box2& box, const u8string& s, const function<void()>& clicked, const float font_scale = 1.0f)
 {
-	const auto inside = is_vec2_inside_box2(mouse_position, box);
+	const auto inside = box.contains(mouse_position);
 	if (inside && left_mouse && !gui_state.selected_object && !gui_state.left_mouse_handled)
 	{
 		clicked();
@@ -423,7 +429,7 @@ export int gui_button(const box2& box, const u8string& s, const function<void()>
 }
 
 export int gui_selection_box(box2& normalized_box, const box2& full_pixel_box, const bool read_only, const vec4& base_color,
-	const optional<float> &aspect_ratio, const function<void()>& changed, SelectionBoxState& state)
+	const optional<float>& aspect_ratio, const function<void()>& changed, SelectionBoxState& state)
 {
 	const vec2 full_pixel_box_size = full_pixel_box.size();
 	const box2 pixel_box = { normalized_box.v0 * full_pixel_box_size + full_pixel_box.v0, normalized_box.v1 * full_pixel_box_size + full_pixel_box.v0 };
@@ -440,6 +446,7 @@ export int gui_selection_box(box2& normalized_box, const box2& full_pixel_box, c
 			pSelectionBoxState->normalized_box = &normalized_box;\
 			pSelectionBoxState->full_pixel_box = full_pixel_box;\
 			pSelectionBoxState->changed = changed;\
+			pSelectionBoxState->aspect_ratio = aspect_ratio;\
 		}\
 	} while(0) 
 
@@ -447,7 +454,7 @@ export int gui_selection_box(box2& normalized_box, const box2& full_pixel_box, c
 do {\
 	const box2 box = _box;\
 	const vec4 *color;\
-	if (!read_only && is_vec2_inside_box2(mouse_position, box.with_offset(touch_offset)))\
+	if (!read_only && box.with_offset(touch_offset).contains(mouse_position))\
 	{\
 		next_cursor = SelectionBoxStateSide::_side == SelectionBoxStateSide::Up || SelectionBoxStateSide::_side == SelectionBoxStateSide::Down ? cursor_v : cursor_h;\
 		color = &color_button_face_highlight;\
@@ -477,7 +484,7 @@ do{\
 			box2::from_corner_size(pixel_box.top_right() - vec2{ border, 0 }, { border, pixel_box_size.y })
 		});
 
-	if (!read_only && !next_cursor && is_vec2_inside_box2(mouse_position, pixel_box))
+	if (!read_only && !next_cursor && pixel_box.contains(mouse_position))
 	{
 		next_cursor = cursor_move;
 		PROCESS_SIDE_HELPER(All);

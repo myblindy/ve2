@@ -280,7 +280,7 @@ void gui_process(const double current_time_sec)
 	// render the selection box -- need to figure out the aspect corrected position of the main video player
 	static SelectionBoxState selection_box_state{};
 	gui_selection_box(active_selection_box, get_aspect_corrected_video_pixel_bounds_box(), video->playing(),
-		active_selection_box_is_keyframe ? vec4(1, 0, 1, 1) : vec4(1, 1, 1, 1), keyframes.aspect_ratio(),
+		active_selection_box_is_keyframe ? vec4(1, 0, 1, 1) : vec4(1, 1, 1, 1), keyframes.is_first(last_frame_timestamp) ? optional<float>() : keyframes.aspect_ratio(),
 		[]
 		{
 			keyframes.add(last_frame_timestamp * video->time_base(), active_selection_box);

@@ -92,6 +92,9 @@
     <ClCompile Include="video.ixx">
       <Filter>Source Files\video</Filter>
     </ClCompile>
+    <ClCompile Include="composition.ixx">
+      <Filter>Source Files\video</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="ve2.rc">

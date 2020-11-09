@@ -185,6 +185,7 @@
     <ClInclude Include="targetver.h" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="composition.ixx" />
     <ClCompile Include="gui.ixx" />
     <ClCompile Include="keyframes.ixx" />
     <ClCompile Include="sdf_font.cpp">

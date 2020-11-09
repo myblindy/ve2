@@ -65,10 +65,10 @@ namespace glm
 
 		static box2 from_corner_size(const vec2& pos, const vec2& size) { return { pos, pos + size }; }
 
-		float x() const { return v0.x; }
-		float y() const { return v0.y; }
-		float z() const { return v1.x; }
-		float w() const { return v1.y; }
+		auto x() const { return v0.x; }
+		auto y() const { return v0.y; }
+		auto z() const { return v1.x; }
+		auto w() const { return v1.y; }
 
 		vec2 size() const { return v1 - v0; }
 
@@ -83,7 +83,9 @@ namespace glm
 		void move_right(const float deltaX) { v1.x += deltaX; }
 		void move(const vec2& delta) { v0 += delta; v1 += delta; }
 
-
+		void force_aspect_ratio_top(const float ar) { const auto sz = size(); move_top(-(ar / (sz.x / sz.y) - 1) * sz.y); }
+		void force_aspect_ratio_bottom(const float ar) { const auto sz = size(); move_bottom(-(ar / (sz.x / sz.y) - 1) * sz.y); }
+		void force_aspect_ratio_right(const float ar) { const auto sz = size(); move_right((ar / (sz.x / sz.y) - 1) * sz.x); }
 
 		void clamp(float x0, float y0, float x1, float y1)
 		{
@@ -112,13 +114,13 @@ namespace glm
 		}
 
 		box2 with_offset(const float offset) const { return { v0 - offset, v1 + offset }; }
-	};
 
-	export bool is_vec2_inside_box2(const vec2& pos, const box2& box)
-	{
-		return pos.x >= min(box.v0.x, box.v1.x) && pos.x <= max(box.v0.x, box.v1.x)
-			&& pos.y >= min(box.v0.y, box.v1.y) && pos.y <= max(box.v0.y, box.v1.y);
-	}
+		bool contains(const vec2& pos) const
+		{
+			return pos.x >= min(v0.x, v1.x) && pos.x <= max(v0.x, v1.x)
+				&& pos.y >= min(v0.y, v1.y) && pos.y <= max(v0.y, v1.y);
+		}
+	};
 
 	export box2 mix(const box2& from, const box2& to, const float percentage)
 	{
