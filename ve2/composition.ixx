@@ -53,6 +53,8 @@ export struct Composition
 				real_pts += part.to_pts - part.from_pts;
 				full_pts = part.to_pts;
 			}
+
+		throw exception("composition lookup out of range");
 	}
 
 private:

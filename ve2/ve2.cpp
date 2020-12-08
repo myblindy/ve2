@@ -22,20 +22,22 @@ GLFWframebuffersizefun previous_framebuffer_size_callback;
 GLFWkeyfun previous_key_callback;
 
 unique_ptr<Video> video;
-int64_t last_frame_timestamp{};
+int64_t last_frame_pts{};
 constexpr double frame_time_sec_paused{ 1.0 / 30.0 };
 double frame_time_sec, next_frame_time_sec = 0, next_frame_time_sec_remaining_paused{};
 
 KeyFrames keyframes;
 
 // gui layout constants
-constexpr float gui_left_button_width = 30.f, gui_slider_height = 15.f, gui_slider_margins_x = 5.f, gui_time_position_width = 100.f,
-gui_play_bar_height = gui_left_button_width;
+constexpr float gui_left_button_width = 30.f, gui_slider_height = 15.f, gui_slider_margins_x = 5.f, gui_time_position_width = 100.f;
+constexpr float gui_play_bar_height = gui_left_button_width;
+constexpr float gui_composition_height = 30.f;
 constexpr float gui_font_scale = 0.2f;
 
 // gui boxes
 box2 active_selection_box{ {0, 0}, {1, 1} };
 bool active_selection_box_is_keyframe = false;
+double gui_composition_zoom = 1.;
 
 #pragma pack(push, 1)
 struct Vertex
@@ -74,7 +76,7 @@ void update_screen_layout()
 	const auto frame_size = video->frame_size();
 
 	// split the screen horizontally
-	const auto height = (window_height - gui_play_bar_height) / 2;
+	const auto height = (window_height - gui_play_bar_height - gui_composition_height) / 2;
 	full_video_buffer_object->data.pixel_bounds_box = box2::from_corner_size({ 0, gui_play_bar_height }, { window_width, height });
 	full_video_buffer_object->data.window_and_video_pixel_size = { window_width, window_height, frame_size.x, frame_size.y };
 	full_video_buffer_object->update();
@@ -266,11 +268,11 @@ void gui_process(const double current_time_sec)
 	// render the position slider and its label
 	gui_slider(
 		box2::from_corner_size({ gui_left_button_width + gui_slider_margins_x, gui_play_bar_height / 2.f - gui_slider_height / 2.f }, { window_width - gui_time_position_width - gui_slider_margins_x - gui_left_button_width, gui_slider_height }), 0.0f,
-		static_cast<double>(video->duration_pts()), static_cast<double>(last_frame_timestamp),
-		[&](double new_value) { video->seek_pts(static_cast<int64_t>(new_value * video->duration_pts())); });
+		static_cast<double>(video->duration_pts()), static_cast<double>(last_frame_pts),
+		[&](double new_percent) { video->seek_pts(static_cast<int64_t>(new_percent * video->duration_pts())); });
 
-	const auto slider_label = u8_seconds_to_time_string(last_frame_timestamp * video->time_base()) + u8" / " +
-		u8_seconds_to_time_string(video->duration_sec());
+	const auto last_frame_sec = last_frame_pts * video->time_base();
+	const auto slider_label = u8_seconds_to_time_string(last_frame_sec) + u8" / " + u8_seconds_to_time_string(video->duration_sec());
 	gui_label(box2::from_corner_size({ window_width - gui_time_position_width, 0 }, { gui_time_position_width, gui_play_bar_height }), slider_label, gui_font_scale);
 
 	// left buttons
@@ -281,12 +283,15 @@ void gui_process(const double current_time_sec)
 	static SelectionBoxState selection_box_state{};
 	gui_selection_box(active_selection_box, get_aspect_corrected_video_pixel_bounds_box(), video->playing(),
 		active_selection_box_is_keyframe ? vec4(1, 0, 1, 1) : vec4(1, 1, 1, 1),
-		keyframes.is_first(last_frame_timestamp * video->time_base()) ? optional<float>() : keyframes.aspect_ratio(),
-		[]
+		keyframes.is_first(last_frame_sec) ? optional<float>() : keyframes.aspect_ratio(),
+		[&]
 		{
-			keyframes.add(last_frame_timestamp * video->time_base(), active_selection_box);
+			keyframes.add(last_frame_sec, active_selection_box);
 			active_selection_box_is_keyframe = true;
 		}, selection_box_state);
+
+	// render the composition UI
+
 
 	// render the gui to screen
 	gui_render();
@@ -319,7 +324,7 @@ bool gl_render()
 				active_selection_box_is_keyframe = keyframes.contains(ts);
 
 				// frame is processed
-				last_frame_timestamp = pts;
+				last_frame_pts = pts;
 				next_frame_time_sec += frame_duration_pts * video->time_base();
 				video->clear_force_display();
 			});
